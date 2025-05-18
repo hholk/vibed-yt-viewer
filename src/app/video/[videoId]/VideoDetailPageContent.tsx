@@ -356,9 +356,19 @@ export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageCont
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < allVideos.length - 1;
 
-  // Handle keyboard navigation
+  // Get previous and next videos for navigation
   const prevVideo = hasPrevious ? allVideos[currentIndex - 1] : undefined;
   const nextVideo = hasNext ? allVideos[currentIndex + 1] : undefined;
+
+  // Prefetch next and previous video pages
+  useEffect(() => {
+    if (prevVideo) {
+      router.prefetch(`/video/${prevVideo.VideoID}?sort=${currentSort}`);
+    }
+    if (nextVideo) {
+      router.prefetch(`/video/${nextVideo.VideoID}?sort=${currentSort}`);
+    }
+  }, [prevVideo, nextVideo, currentSort, router]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'ArrowLeft' && prevVideo) {
@@ -384,41 +394,55 @@ export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageCont
   // Navigation buttons component - top row
   const NavigationButtons = () => (
     <div className="fixed top-4 left-0 right-0 z-10 flex items-center justify-between px-4 max-w-[33.6rem] mx-auto w-full">
-      <button
-        onClick={() => navigateToVideo('prev')}
-        disabled={!hasPrevious}
-        className={`flex items-center px-4 py-2 rounded-md text-sm transition-colors ${
-          hasPrevious 
-            ? 'text-blue-400 hover:bg-neutral-700/90 hover:text-blue-300' 
-            : 'text-neutral-600 cursor-not-allowed'
-        } bg-neutral-800/80 backdrop-blur-sm border border-neutral-700`}
-        aria-label="Previous video"
-      >
-        <ChevronLeft className="h-4 w-4 mr-1" />
-        <span>Previous</span>
-      </button>
+      {prevVideo ? (
+        <Link
+          href={`/video/${prevVideo.VideoID}?sort=${currentSort}`}
+          prefetch={true}
+          className="flex items-center px-4 py-2 rounded-md text-sm transition-colors text-blue-400 hover:bg-neutral-700/90 hover:text-blue-300 bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
+          aria-label="Previous video"
+        >
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          <span>Previous</span>
+        </Link>
+      ) : (
+        <button
+          disabled
+          className="flex items-center px-4 py-2 rounded-md text-sm text-neutral-600 cursor-not-allowed bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
+          aria-label="No previous video"
+        >
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          <span>Previous</span>
+        </button>
+      )}
 
       <Link 
-        href="/" 
-        className="flex items-center px-4 py-2 text-sm rounded-md bg-neutral-800/80 backdrop-blur-sm border border-neutral-700 text-blue-400 hover:text-blue-300 hover:bg-neutral-700/90 transition-colors"
+        href={`/?sort=${currentSort}`} 
+        className="flex items-center px-4 py-2 text-sm text-blue-400 hover:text-blue-300 bg-neutral-800/80 hover:bg-neutral-700/90 backdrop-blur-sm rounded-md border border-neutral-700 transition-colors"
       >
-        <ArrowLeft className="h-4 w-4 mr-2" />
-        Back to Home
+        <ArrowLeft className="h-4 w-4 mr-1" />
+        Back to List
       </Link>
 
-      <button
-        onClick={() => navigateToVideo('next')}
-        disabled={!hasNext}
-        className={`flex items-center px-4 py-2 rounded-md text-sm transition-colors ${
-          hasNext 
-            ? 'text-blue-400 hover:bg-neutral-700/90 hover:text-blue-300' 
-            : 'text-neutral-600 cursor-not-allowed'
-        } bg-neutral-800/80 backdrop-blur-sm border border-neutral-700`}
-        aria-label="Next video"
-      >
-        <span>Next</span>
-        <ChevronRight className="h-4 w-4 ml-1" />
-      </button>
+      {nextVideo ? (
+        <Link
+          href={`/video/${nextVideo.VideoID}?sort=${currentSort}`}
+          prefetch={true}
+          className="flex items-center px-4 py-2 rounded-md text-sm transition-colors text-blue-400 hover:bg-neutral-700/90 hover:text-blue-300 bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
+          aria-label="Next video"
+        >
+          <span>Next</span>
+          <ChevronRight className="h-4 w-4 ml-1" />
+        </Link>
+      ) : (
+        <button
+          disabled
+          className="flex items-center px-4 py-2 rounded-md text-sm text-neutral-600 cursor-not-allowed bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
+          aria-label="No next video"
+        >
+          <span>Next</span>
+          <ChevronRight className="h-4 w-4 ml-1" />
+        </button>
+      )}
     </div>
   );
 
