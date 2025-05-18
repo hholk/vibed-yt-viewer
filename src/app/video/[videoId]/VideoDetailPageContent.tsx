@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ChevronDown, ChevronRight, ChevronLeft, Save, Edit, X, AlertCircle } from 'lucide-react';
@@ -79,7 +79,7 @@ interface DetailItemProps {
   children?: React.ReactNode;
 }
 
-const DetailItem: React.FC<DetailItemProps> = ({ 
+const DetailItem = React.memo<DetailItemProps>(({ 
   label, 
   value, 
   className, 
@@ -274,7 +274,16 @@ const DetailItem: React.FC<DetailItemProps> = ({
       )}
     </div>
   );
-};
+});
+
+// Define constant arrays outside the component to prevent recreation on each render
+const ARRAY_FIELDS = [
+  'Indicators', 'Trends', 'InvestableAssets', 'Institutions',
+  'EventsFairs', 'DOIs', 'Hashtags', 'PrimarySources',
+  'TechnicalTerms', 'Speakers', 'KeyExamples', 'MemorableQuotes',
+  'MemorableTakeaways', 'BookMediaRecommendations', 'RelatedURLs',
+  'Persons', 'Companies'
+];
 
 export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageContentProps) => {
   const router = useRouter();
@@ -368,7 +377,7 @@ export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageCont
     if (nextVideo) {
       router.prefetch(`/video/${nextVideo.VideoID}?sort=${currentSort}`);
     }
-  }, [prevVideo, nextVideo, currentSort, router]);
+  }, [prevVideo?.VideoID, nextVideo?.VideoID, currentSort, router]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'ArrowLeft' && prevVideo) {
@@ -376,11 +385,13 @@ export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageCont
     } else if (e.key === 'ArrowRight' && nextVideo) {
       router.push(`/video/${nextVideo.VideoID}?sort=${currentSort}`);
     }
-  }, [nextVideo, prevVideo, router, currentSort]);
+  }, [nextVideo?.VideoID, prevVideo?.VideoID, router, currentSort]);
 
+  // Optimize the event listener effect
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    const handler = (e: KeyboardEvent) => handleKeyDown(e);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, [handleKeyDown]);
 
   const navigateToVideo = (direction: 'prev' | 'next') => {
@@ -391,63 +402,65 @@ export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageCont
     }
   };
   
-  // Navigation buttons component - top row
-  const NavigationButtons = () => (
-    <div className="fixed top-4 left-0 right-0 z-10 flex items-center justify-between px-4 max-w-[33.6rem] mx-auto w-full">
-      {prevVideo ? (
-        <Link
-          href={`/video/${prevVideo.VideoID}?sort=${currentSort}`}
-          prefetch={true}
-          className="flex items-center px-4 py-2 rounded-md text-sm transition-colors text-blue-400 hover:bg-neutral-700/90 hover:text-blue-300 bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
-          aria-label="Previous video"
+  // Navigation buttons component
+  const NavigationButtons = useMemo(() => {
+    return (
+      <div className="fixed top-4 left-0 right-0 z-10 flex items-center justify-between px-4 max-w-[33.6rem] mx-auto w-full">
+        {prevVideo ? (
+          <Link
+            href={`/video/${prevVideo.VideoID}?sort=${currentSort}`}
+            prefetch={true}
+            className="flex items-center px-4 py-2 rounded-md text-sm transition-colors text-blue-400 hover:bg-neutral-700/90 hover:text-blue-300 bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
+            aria-label="Previous video"
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            <span>Previous</span>
+          </Link>
+        ) : (
+          <button
+            disabled
+            className="flex items-center px-4 py-2 rounded-md text-sm text-neutral-600 cursor-not-allowed bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
+            aria-label="No previous video"
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            <span>Previous</span>
+          </button>
+        )}
+
+        <Link 
+          href={`/?sort=${currentSort}`} 
+          className="flex items-center px-4 py-2 text-sm text-blue-400 hover:text-blue-300 bg-neutral-800/80 hover:bg-neutral-700/90 backdrop-blur-sm rounded-md border border-neutral-700 transition-colors"
         >
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          <span>Previous</span>
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Back to List
         </Link>
-      ) : (
-        <button
-          disabled
-          className="flex items-center px-4 py-2 rounded-md text-sm text-neutral-600 cursor-not-allowed bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
-          aria-label="No previous video"
-        >
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          <span>Previous</span>
-        </button>
-      )}
 
-      <Link 
-        href={`/?sort=${currentSort}`} 
-        className="flex items-center px-4 py-2 text-sm text-blue-400 hover:text-blue-300 bg-neutral-800/80 hover:bg-neutral-700/90 backdrop-blur-sm rounded-md border border-neutral-700 transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4 mr-1" />
-        Back to List
-      </Link>
+        {nextVideo ? (
+          <Link
+            href={`/video/${nextVideo.VideoID}?sort=${currentSort}`}
+            prefetch={true}
+            className="flex items-center px-4 py-2 rounded-md text-sm transition-colors text-blue-400 hover:bg-neutral-700/90 hover:text-blue-300 bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
+            aria-label="Next video"
+          >
+            <span>Next</span>
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Link>
+        ) : (
+          <button
+            disabled
+            className="flex items-center px-4 py-2 rounded-md text-sm text-neutral-600 cursor-not-allowed bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
+            aria-label="No next video"
+          >
+            <span>Next</span>
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </button>
+        )}
+      </div>
+    );
+  }, [currentSort, nextVideo, prevVideo]);
 
-      {nextVideo ? (
-        <Link
-          href={`/video/${nextVideo.VideoID}?sort=${currentSort}`}
-          prefetch={true}
-          className="flex items-center px-4 py-2 rounded-md text-sm transition-colors text-blue-400 hover:bg-neutral-700/90 hover:text-blue-300 bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
-          aria-label="Next video"
-        >
-          <span>Next</span>
-          <ChevronRight className="h-4 w-4 ml-1" />
-        </Link>
-      ) : (
-        <button
-          disabled
-          className="flex items-center px-4 py-2 rounded-md text-sm text-neutral-600 cursor-not-allowed bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
-          aria-label="No next video"
-        >
-          <span>Next</span>
-          <ChevronRight className="h-4 w-4 ml-1" />
-        </button>
-      )}
-    </div>
-  );
-
-  // User-defined order for fields. Title and VideoID are handled separately.
-  const fieldsToDisplayInOrder: (keyof Video)[] = [
+  // Memoize the fields to display to prevent recreation on each render
+  const fieldsToDisplayInOrder = useMemo((): (keyof Video)[] => [
     'ThumbHigh', // Displayed as 'Thumbnail'
     'URL', // Displayed as 'Video Link'
     'ActionableAdvice',
@@ -485,11 +498,11 @@ export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageCont
     'UpdatedAt',
     'PublishedAt',
     'Transcript' // Using Transcript field instead of FullTranscript
-  ];
+  ], []);
 
   return (
     <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans relative">
-      <NavigationButtons />
+      {NavigationButtons}
       
       <div className="max-w-[33.6rem] mx-auto pt-20">
         <h1 className="font-plex-mono text-3xl md:text-4xl font-bold mb-1 text-neutral-100 break-words">
@@ -509,26 +522,8 @@ export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageCont
             if (key === 'VideoID') return null; // Already displayed under title
             if (key === 'Title') return null; // Already displayed as H1
 
-            // Determine if this field should be rendered as a list
-            const isArrayField = [
-              'Indicators',
-              'Trends',
-              'InvestableAssets',
-              'Institutions',
-              'EventsFairs',
-              'DOIs',
-              'Hashtags',
-              'PrimarySources',
-              'TechnicalTerms',
-              'Speakers',
-              'KeyExamples',
-              'MemorableQuotes',
-              'MemorableTakeaways',
-              'BookMediaRecommendations',
-              'RelatedURLs',
-              'Persons',
-              'Companies'
-            ].includes(key as string);
+            // Use the pre-defined ARRAY_FIELDS constant
+            const isArrayField = ARRAY_FIELDS.includes(key as string);
 
             if (key === 'ImportanceRating') {
               return (
@@ -635,13 +630,7 @@ export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageCont
                 isInitiallyCollapsed={false}
                 isLink={key === 'URL' || key === 'RelatedURLs'}
                 isImage={key === 'ThumbHigh'}
-                isList={[
-                  'Indicators', 'Trends', 'InvestableAssets', 'Institutions',
-                  'EventsFairs', 'DOIs', 'Hashtags', 'PrimarySources',
-                  'TechnicalTerms', 'Speakers', 'KeyExamples', 'MemorableQuotes',
-                  'MemorableTakeaways', 'BookMediaRecommendations', 'RelatedURLs',
-                  'Persons', 'Companies'
-                ].includes(key as string) && Array.isArray(value)}
+                isList={ARRAY_FIELDS.includes(key as string) && Array.isArray(value)}
               />
             );
           })}

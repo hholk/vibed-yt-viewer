@@ -1,6 +1,9 @@
 import axios from 'axios';
 import { z } from 'zod';
 
+// Simple in-memory cache for video data
+const videoCache = new Map<string, Promise<Video | null>>();
+
 // Schema for NocoDB attachment field (like ThumbHigh)
 const nocoDBAttachmentSchema = z.object({
   url: z.string().url(),
@@ -349,8 +352,14 @@ export async function fetchVideos<T extends z.ZodTypeAny = typeof videoSchema>(
 /**
  * Fetches a single video record from NocoDB by its VideoID (which is a string field).
  * Fetches all fields for the video.
+ * Uses an in-memory cache to prevent redundant API calls for the same video ID.
  */
-export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: string, ncTableNameParam?: string): Promise<Video | null> {
+export function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: string, ncTableNameParam?: string): Promise<Video | null> {
+  // Check if we already have a pending or resolved promise for this videoId
+  if (videoCache.has(videoId)) {
+    return videoCache.get(videoId)!;
+  }
+
   const currentNcUrl = process.env.NEXT_PUBLIC_NC_URL;
   const currentNcToken = process.env.NEXT_PUBLIC_NC_TOKEN;
   const tableName = ncTableNameParam || process.env.NEXT_PUBLIC_NOCODB_TABLE_NAME || 'youtubeTranscripts';
@@ -361,45 +370,56 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
     throw new Error('NocoDB credentials not configured.');
   }
 
-  try {
-    const response = await apiClient.get(
-      `${currentNcUrl}/api/v1/db/data/noco/${projectId}/${tableName}/find-one`,
-      {
-        headers: { 'xc-token': currentNcToken },
-        params: { // No 'fields' param here to fetch all fields for the single record
-          where: `(VideoID,eq,${videoId})`,
-        },
+  // Create a promise for this video fetch and store it in the cache
+  const fetchPromise = (async () => {
+    try {
+      const response = await apiClient.get(
+        `${currentNcUrl}/api/v1/db/data/noco/${projectId}/${tableName}/find-one`,
+        {
+          headers: { 'xc-token': currentNcToken },
+          params: { // No 'fields' param here to fetch all fields for the single record
+            where: `(VideoID,eq,${videoId})`,
+          },
+        }
+      );
+
+      // Log the raw response data for debugging
+      console.log(`[fetchVideoByVideoId - ${videoId}] Raw NocoDB response data:`, JSON.stringify(response.data, null, 2));
+
+      if (!response.data || Object.keys(response.data).length === 0) {
+        console.warn(`[fetchVideoByVideoId - ${videoId}] No data returned from NocoDB or data is empty object.`);
+        return null; // Not found
       }
-    );
 
-    // Log the raw response data for debugging
-    console.log(`[fetchVideoByVideoId - ${videoId}] Raw NocoDB response data:`, JSON.stringify(response.data, null, 2));
+      const parsedVideo = videoSchema.safeParse(response.data);
 
-    if (!response.data || Object.keys(response.data).length === 0) {
-      console.warn(`[fetchVideoByVideoId - ${videoId}] No data returned from NocoDB or data is empty object.`);
-      return null; // Not found
-    }
-
-    const parsedVideo = videoSchema.safeParse(response.data);
-
-    if (!parsedVideo.success) {
-      console.error(`[fetchVideoByVideoId - ${videoId}] Failed to parse NocoDB response. Issues:`, parsedVideo.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('\n'));
-      console.error(`[fetchVideoByVideoId - ${videoId}] Problematic NocoDB data for find-one (VideoID: ${videoId}):`, JSON.stringify(response.data, null, 2));
-      throw new Error(`Failed to parse NocoDB API response for VideoID ${videoId}.`);
-    }
-    return parsedVideo.data;
-
-  } catch (error: any) {
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      if (!parsedVideo.success) {
+        console.error(`[fetchVideoByVideoId - ${videoId}] Failed to parse NocoDB response. Issues:`, parsedVideo.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('\n'));
+        console.error(`[fetchVideoByVideoId - ${videoId}] Problematic NocoDB data for find-one (VideoID: ${videoId}):`, JSON.stringify(response.data, null, 2));
+        throw new Error(`Failed to parse NocoDB API response for VideoID ${videoId}.`);
+      }
+      return parsedVideo.data;
+    } catch (error: any) {
+      // Remove from cache on error to allow retries
+      videoCache.delete(videoId);
+      
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
         console.warn(`Video with VideoID ${videoId} not found in NocoDB (404).`);
         return null;
-    }
-    console.error(`Error fetching video by VideoID ${videoId}:`, error.response?.data || error.message);
-    if (error.message.startsWith('Failed to parse NocoDB API response')) {
+      }
+      console.error(`Error fetching video by VideoID ${videoId}:`, error.response?.data || error.message);
+      if (error.message.startsWith('Failed to parse NocoDB API response')) {
         throw error;
+      }
+      throw new Error(`Failed to fetch video (VideoID: ${videoId}) from NocoDB: ${error.message}`);
     }
-    throw new Error(`Failed to fetch video (VideoID: ${videoId}) from NocoDB: ${error.message}`);
-  }
+  })();
+
+  // Store the promise in the cache before returning it
+  videoCache.set(videoId, fetchPromise);
+  
+  // Return the promise that will resolve to the video data
+  return fetchPromise;
 }
 
 interface FetchAllVideosOptions<T extends z.ZodTypeAny> {
