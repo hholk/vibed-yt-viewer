@@ -89,37 +89,60 @@
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  /* Material Design Dark Theme Inspired Palette */
+  --background: oklch(0.106 0 0); /* ~#121212 */
+  --foreground: oklch(0.98 0 0); /* ~#FAFAFA, high emphasis text */
+
+  --card: oklch(0.153 0 0); /* ~#1E1E1E, surface color */
+  --card-foreground: oklch(0.98 0 0); /* Text on card, same as foreground */
+
+  --popover: oklch(0.16 0 0); /* Slightly lighter surface for popovers, ~#202020 */
+  --popover-foreground: oklch(0.98 0 0);
+
+  /* Primary color (accent for interactive elements) */
+  --primary: oklch(0.75 0.15 265); /* A lighter, somewhat vibrant purple/blue for dark mode */
+  --primary-foreground: oklch(0.1 0 0); /* Dark text on light primary */
+  
+  /* Secondary color (less prominent interactive elements) */
+  --secondary: oklch(0.3 0.03 260); /* A muted dark blue/purple */
+  --secondary-foreground: oklch(0.95 0 0); /* Light text on secondary */
+
+  /* Muted colors */
+  --muted: oklch(0.22 0.015 255); /* Darker muted blue/gray */
+  --muted-foreground: oklch(0.7 0.01 255); /* Lighter text for muted content */
+
+  /* Accent colors (can be same as primary or a different hue) */
+  --accent: oklch(0.75 0.15 265); /* Using primary as accent */
+  --accent-foreground: oklch(0.1 0 0);
+
+  /* Destructive actions */
+  --destructive: oklch(0.5 0.22 25); /* A noticeable red for errors */
+  --destructive-foreground: oklch(0.98 0 0);
+
+  /* Borders and Rings */
+  --border: oklch(0.2 0 0); /* Subtle border, ~#2D2D2D */
+  --input: oklch(0.22 0.01 250); /* Input field background, slightly lighter than border */
+  --ring: oklch(0.75 0.15 265); /* Ring color, often same as primary */
+
+  /* Brand color adjustment for dark theme */
+  /* --brand-hue, --brand-saturation are inherited from :root */
+  --brand-lightness: 85%; /* Makes brand color light for dark background */
+
+  /* Chart and Sidebar colors (can be refined further if used extensively) */
+  --chart-1: oklch(0.65 0.22 40);
+  --chart-2: oklch(0.6 0.12 185);
+  --chart-3: oklch(0.4 0.07 225);
+  --chart-4: oklch(0.8 0.19 85);
+  --chart-5: oklch(0.75 0.19 70);
+
+  --sidebar: oklch(0.12 0 0); /* Slightly darker than main background for depth, ~#1A1A1A */
+  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar-primary: oklch(0.75 0.15 265);
+  --sidebar-primary-foreground: oklch(0.1 0 0);
+  --sidebar-accent: oklch(0.3 0.03 260);
+  --sidebar-accent-foreground: oklch(0.95 0 0);
+  --sidebar-border: oklch(0.18 0 0);
+  --sidebar-ring: oklch(0.75 0.15 265);
 }
 
 @layer base {
