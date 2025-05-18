@@ -244,6 +244,11 @@ const DetailItem: React.FC<DetailItemProps> = ({
     return <span className="text-sm break-words">{String(value)}</span>;
   };
 
+  // Don't render the component at all if the value is empty
+  if (isEmpty) {
+    return null;
+  }
+
   return (
     <div className="mb-3 last:mb-0 bg-neutral-800/50 p-3 rounded-lg shadow-sm">
       <button 
@@ -376,32 +381,43 @@ export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageCont
     }
   };
   
-  // Navigation buttons component
+  // Navigation buttons component - top row
   const NavigationButtons = () => (
-    <div className="flex items-center justify-between mb-6">
+    <div className="fixed top-4 left-0 right-0 z-10 flex items-center justify-between px-4 max-w-[33.6rem] mx-auto w-full">
       <button
         onClick={() => navigateToVideo('prev')}
         disabled={!hasPrevious}
-        className={`flex items-center px-4 py-2 rounded-md ${hasPrevious ? 'text-blue-400 hover:text-blue-300' : 'text-neutral-600 cursor-not-allowed'}`}
+        className={`flex items-center px-4 py-2 rounded-md text-sm transition-colors ${
+          hasPrevious 
+            ? 'text-blue-400 hover:bg-neutral-700/90 hover:text-blue-300' 
+            : 'text-neutral-600 cursor-not-allowed'
+        } bg-neutral-800/80 backdrop-blur-sm border border-neutral-700`}
         aria-label="Previous video"
       >
-        <ChevronLeft className="h-5 w-5 mr-1" />
+        <ChevronLeft className="h-4 w-4 mr-1" />
         <span>Previous</span>
       </button>
-      
-      <Link href="/" className="flex items-center text-blue-400 hover:text-blue-300">
-        <ArrowLeft className="h-5 w-5 mr-2 transition-transform group-hover:-translate-x-1" />
+
+      <Link 
+        href="/" 
+        className="flex items-center px-4 py-2 text-sm rounded-md bg-neutral-800/80 backdrop-blur-sm border border-neutral-700 text-blue-400 hover:text-blue-300 hover:bg-neutral-700/90 transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4 mr-2" />
         Back to Home
       </Link>
-      
+
       <button
         onClick={() => navigateToVideo('next')}
         disabled={!hasNext}
-        className={`flex items-center px-4 py-2 rounded-md ${hasNext ? 'text-blue-400 hover:text-blue-300' : 'text-neutral-600 cursor-not-allowed'}`}
+        className={`flex items-center px-4 py-2 rounded-md text-sm transition-colors ${
+          hasNext 
+            ? 'text-blue-400 hover:bg-neutral-700/90 hover:text-blue-300' 
+            : 'text-neutral-600 cursor-not-allowed'
+        } bg-neutral-800/80 backdrop-blur-sm border border-neutral-700`}
         aria-label="Next video"
       >
         <span>Next</span>
-        <ChevronRight className="h-5 w-5 ml-1" />
+        <ChevronRight className="h-4 w-4 ml-1" />
       </button>
     </div>
   );
@@ -448,10 +464,10 @@ export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageCont
   ];
 
   return (
-    <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
-      <div className="max-w-4xl mx-auto">
-        <NavigationButtons />
-
+    <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans relative">
+      <NavigationButtons />
+      
+      <div className="max-w-[33.6rem] mx-auto pt-20">
         <h1 className="font-plex-mono text-3xl md:text-4xl font-bold mb-1 text-neutral-100 break-words">
           {video.Title}
         </h1>
