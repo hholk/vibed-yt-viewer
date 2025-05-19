@@ -334,7 +334,25 @@ export function VideoDetailPageContent({
   const [personalComment, setPersonalComment] = useState(video.PersonalComment || '');
   const [isSaving, setIsSaving] = useState(false); 
   const [saveError, setSaveError] = useState<string | null>(null);
-  
+
+  // Handler to clear DetailedNarrativeFlow
+  const handleClearNarrative = async () => {
+    if (!currentVideo?.Id) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await updateVideo(currentVideo.Id, { DetailedNarrativeFlow: null });
+      setCurrentVideo(prev => prev ? { ...prev, DetailedNarrativeFlow: null } : null);
+      alert('Narrative cleared successfully!');
+    } catch (error) {
+      console.error('Failed to clear narrative:', error);
+      setSaveError(error instanceof Error ? error.message : 'Failed to clear narrative.');
+      alert('Failed to clear narrative. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   
   const [activeImportanceRating, setActiveImportanceRating] = useState<number | null>(video.ImportanceRating || null);
   
@@ -524,7 +542,19 @@ export function VideoDetailPageContent({
   return (
     <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
       <div className="container mx-auto max-w-5xl">
-        {}
+        {/* Narrative clear button in right column, visible if narrative exists */}
+        {currentVideo?.DetailedNarrativeFlow && (
+          <div className="fixed top-24 right-8 z-20">
+            <button
+              onClick={handleClearNarrative}
+              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 shadow-md transition-colors"
+              aria-label="Clear Narrative"
+              disabled={isSaving}
+            >
+              {isSaving ? 'Clearing...' : 'Clear Narrative'}
+            </button>
+          </div>
+        )}
         <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
           <Link href={`/?sort=${searchParams.get('sort') || '-CreatedAt'}`} className="flex items-center text-blue-400 hover:text-blue-300 transition-colors group">
             <ArrowLeft size={18} className="mr-2 group-hover:-translate-x-1 transition-transform duration-200" />
@@ -658,7 +688,7 @@ export function VideoDetailPageContent({
                 <div className="space-y-3">
                   <textarea
                     value={personalComment}
-                    onChange={(e) => setPersonalComment(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPersonalComment(e.target.value)}
                     className="w-full p-2.5 bg-neutral-700 text-neutral-50 rounded-md border border-neutral-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     rows={6}
                     disabled={isSaving}

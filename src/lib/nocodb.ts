@@ -290,47 +290,169 @@ const DEFAULT_PAGE_SIZE = 25;
  * @returns The updated video record
  * @throws Error if the update fails or response validation fails
  */
+/**
+ * Looks up the numeric record Id in NocoDB given a VideoID string.
+ * Returns the Id or throws if not found.
+ */
+async function getRecordIdByVideoId(
+  videoId: string,
+  ncProjectIdParam?: string,
+  ncTableNameParam?: string
+): Promise<number> {
+  const video = await fetchVideoByVideoId(videoId, ncProjectIdParam, ncTableNameParam);
+  if (!video || typeof video.Id !== 'number') {
+    throw new Error(`No NocoDB record found for VideoID: ${videoId}`);
+  }
+  return video.Id;
+}
+
+/**
+ * Updates a video record in NocoDB
+ *
+ * Accepts either a numeric recordId or a VideoID string. If a string is provided, resolves it to the numeric Id.
+ */
 export async function updateVideo(
-  recordId: number,
+  recordIdOrVideoId: number | string,
   data: Partial<z.infer<typeof videoSchema>>,
   ncProjectIdParam?: string,
   ncTableNameParam?: string
 ): Promise<Video> {
+  /**
+   * Helper to resolve a numeric ID from either a direct ID or a VideoID string
+   * @param idOrVideoId - Either a numeric ID or a VideoID string
+   * @param ncProjectId - Optional project ID override
+   * @param ncTableName - Optional table name override
+   * @returns The resolved numeric ID
+   * @throws Error if the ID cannot be resolved
+   */
+  async function resolveNumericId(idOrVideoId: number | string, ncProjectId?: string, ncTableName?: string): Promise<number> {
+    // If it's already a number, return it
+    if (typeof idOrVideoId === 'number') return idOrVideoId;
+    
+    // Try to parse as number (in case it's a stringified number)
+    const asNum = Number(idOrVideoId);
+    if (!isNaN(asNum) && Number.isInteger(asNum)) return asNum;
+    
+    // Try to find the video by VideoID
+    try {
+      const video = await fetchVideoByVideoId(idOrVideoId, ncProjectId, ncTableName);
+      if (!video) {
+        throw new Error(`No video found with VideoID: ${idOrVideoId}`);
+      }
+      return video.Id;
+    } catch (error: unknown) {
+      console.error(`Error resolving numeric ID for ${idOrVideoId}:`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to resolve numeric ID for ${idOrVideoId}: ${errorMessage}`);
+    }
+  }
+  // Always use env vars for projectId and tableName if not explicitly provided
   const currentNcUrl = process.env.NEXT_PUBLIC_NC_URL;
-  const currentNcToken = process.env.NEXT_PUBLIC_NC_TOKEN;
+  const currentNcToken = process.env.NEXT_PUBLIC_NC_TOKEN || process.env.NC_TOKEN;
+  const projectId = ncProjectIdParam || process.env.NEXT_PUBLIC_NC_PROJECT_ID || 'phk8vxq6f1ev08h';
   const tableName = ncTableNameParam || process.env.NEXT_PUBLIC_NOCODB_TABLE_NAME || 'youtubeTranscripts';
-  const projectId = ncProjectIdParam || process.env.NEXT_PUBLIC_NOCODB_PROJECT_ID || 'phk8vxq6f1ev08h';
 
-  if (!currentNcUrl || !currentNcToken) {
-    throw new Error('NocoDB URL or token is not configured. Please check your environment variables.');
+  // Validate required environment variables
+  if (!currentNcUrl) {
+    throw new Error('NEXT_PUBLIC_NC_URL is not configured');
+  }
+  if (!currentNcToken) {
+    throw new Error('NEXT_PUBLIC_NC_TOKEN or NC_TOKEN is not configured');
   }
 
+  // Prepare the data for the API
+  const updateData = { ...data };
+  
+  // Ensure ImportanceRating is a number if provided
+  if (updateData.ImportanceRating !== undefined) {
+    const rating = Number(updateData.ImportanceRating);
+    updateData.ImportanceRating = isNaN(rating) ? null : rating;
+  }
+
+  // Resolve the numeric ID first
+  let numericId: number;
   try {
+    numericId = await resolveNumericId(recordIdOrVideoId, projectId, tableName);
+    console.log(`[updateVideo] Resolved record ID ${recordIdOrVideoId} to numeric ID:`, numericId);
+  } catch (error) {
+    console.error(`[updateVideo] Failed to resolve numeric ID for record ${recordIdOrVideoId}:`, error);
+    throw new Error(`Could not find video with ID: ${recordIdOrVideoId}`);
+  }
+
+  // Build the URL for the PATCH request
+  const url = `${currentNcUrl}/api/v1/db/data/v1/${projectId}/${tableName}/${numericId}`;
+  
+  console.log(`[updateVideo] PATCH to:`, url, 'with data:', updateData);
+  
+  try {
+    const response = await apiClient.patch(
+      url, 
+      updateData,
+      {
+        headers: {
+          'xc-token': currentNcToken,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
     
-    const client = axios.create({
-      baseURL: currentNcUrl,
-      headers: {
-        'Content-Type': 'application/json',
-        'xc-token': currentNcToken,
-      },
+    // Log the response for debugging
+    console.log('Update response:', {
+      status: response.status,
+      statusText: response.statusText,
+      data: response.data,
     });
 
-    const response = await client.patch(
-      `/api/v1/db/data/noco/${projectId}/${tableName}/${recordId}`,
-      data
-    );
-
-    
+    // Validate the response data
     const parsed = videoSchema.safeParse(response.data);
     if (!parsed.success) {
       console.error('NocoDB API response validation failed:', parsed.error);
+      console.error('Raw response data:', response.data);
       throw new Error('Received invalid data format from NocoDB');
+    }
+
+    // Invalidate cache for this video
+    if (videoCache.has(recordIdOrVideoId.toString())) {
+      videoCache.delete(recordIdOrVideoId.toString());
+    }
+    
+    // Also invalidate by VideoID if we used a VideoID
+    if (typeof recordIdOrVideoId === 'string' && !/^\d+$/.test(recordIdOrVideoId)) {
+      videoCache.delete(recordIdOrVideoId);
     }
 
     return parsed.data;
   } catch (error: any) {
-    console.error(`Error updating video record ${recordId}:`, error.response?.data || error.message);
-    throw new Error(`Failed to update video record: ${error.message}`);
+    // Enhanced error logging
+    let errorMessage = 'Unknown error';
+    
+    if (axios.isAxiosError(error)) {
+      // Handle Axios errors
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        errorMessage = `Status: ${error.response.status} - ${JSON.stringify(error.response.data)}`;
+        console.error('Error response data:', error.response.data);
+        console.error('Error response status:', error.response.status);
+        console.error('Error response headers:', error.response.headers);
+      } else if (error.request) {
+        // The request was made but no response was received
+        errorMessage = 'No response received from server';
+        console.error('No response received. Request config:', error.config);
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        errorMessage = `Request setup error: ${error.message}`;
+        console.error('Error message:', error.message);
+      }
+    } else if (error instanceof Error) {
+      // Handle other Error objects
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    }
+    
+    console.error(`Error updating video record ${recordIdOrVideoId}:`, errorMessage);
+    throw new Error(`Failed to update video record: ${errorMessage}`);
   }
 }
 
@@ -492,11 +614,12 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
   const fetchPromise = (async () => {
     try {
       const response = await apiClient.get(
-        `${currentNcUrl}/api/v1/db/data/noco/${projectId}/${tableName}/find-one`,
+        `${currentNcUrl}/api/v1/db/data/noco/${projectId}/${tableName}`,
         {
           headers: { 'xc-token': currentNcToken },
           params: { 
             where: `(VideoID,eq,${videoId})`,
+            limit: 1
           },
         }
       );
@@ -504,16 +627,17 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
       // Validate the response using the videoSchema
       console.log(`[fetchVideoByVideoId - ${videoId}] Raw NocoDB response data:`, JSON.stringify(response.data, null, 2));
 
-      if (!response.data || Object.keys(response.data).length === 0) {
-        console.warn(`[fetchVideoByVideoId - ${videoId}] No data returned from NocoDB or data is empty object.`);
+      if (!response.data?.list || !Array.isArray(response.data.list) || response.data.list.length === 0) {
+        console.warn(`[fetchVideoByVideoId - ${videoId}] No matching video found with VideoID: ${videoId}`);
         return null; 
       }
 
-      const parsedVideo = videoSchema.safeParse(response.data);
+      const videoData = response.data.list[0];
+      const parsedVideo = videoSchema.safeParse(videoData);
 
       if (!parsedVideo.success) {
         console.error(`[fetchVideoByVideoId - ${videoId}] Failed to parse NocoDB response. Issues:`, parsedVideo.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('\n'));
-        console.error(`[fetchVideoByVideoId - ${videoId}] Problematic NocoDB data for find-one (VideoID: ${videoId}):`, JSON.stringify(response.data, null, 2));
+        console.error(`[fetchVideoByVideoId - ${videoId}] Problematic NocoDB data for VideoID ${videoId}:`, JSON.stringify(videoData, null, 2));
         throw new Error(`Failed to parse NocoDB API response for VideoID ${videoId}.`);
       }
       return parsedVideo.data;
