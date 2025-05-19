@@ -389,7 +389,6 @@ export function VideoDetailPageContent({
 
   
   const detailFieldOrder: (keyof Video)[] = [
-    'Title',
     'ThumbHigh',
     'URL',
     'ActionableAdvice',
@@ -417,12 +416,18 @@ export function VideoDetailPageContent({
     'PrimarySources',
     'Sentiment',
     'SentimentReason',
-    'Channel',
     'Description',
     'TechnicalTerms',
     'Speaker',
     'Transcript'
   ];
+  
+  // Get channel info if it exists
+  const channelInfo = currentVideo.Channel ? {
+    label: 'Channel',
+    value: currentVideo.Channel,
+    isLink: false
+  } : null;
 
   
   if (!currentVideo) {
@@ -497,7 +502,7 @@ export function VideoDetailPageContent({
               }
 
               let isInitiallyCollapsed = true;
-              const initiallyExpandedFields = ['Title', 'ThumbHigh', 'URL', 'ActionableAdvice', 'TLDR', 'MainSummary'];
+              const initiallyExpandedFields = ['ThumbHigh', 'URL', 'ActionableAdvice', 'TLDR', 'MainSummary'];
               if (initiallyExpandedFields.includes(String(fieldKey))) {
                 isInitiallyCollapsed = false;
               }
@@ -524,9 +529,25 @@ export function VideoDetailPageContent({
             {}
           </div>
 
-          {}
+          {/* Right sidebar */}
           <div className="md:col-span-1 space-y-6">
-            {}
+            {/* Channel info at the top */}
+            {channelInfo && (
+              <div className="p-4 bg-neutral-800 rounded-lg shadow">
+                <h3 className="text-lg font-semibold mb-2 text-neutral-300">{channelInfo.label}</h3>
+                <div className="text-neutral-300">
+                  {channelInfo.isLink ? (
+                    <a href={String(channelInfo.value)} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
+                      {String(channelInfo.value)}
+                    </a>
+                  ) : (
+                    String(channelInfo.value)
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Importance Rating */}
             <div className="p-4 bg-neutral-800 rounded-lg shadow">
               <h3 className="text-lg font-semibold mb-2 text-neutral-300">Importance Rating</h3>
               <StarRating
