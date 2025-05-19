@@ -23,24 +23,30 @@ export async function generateMetadata({ params }: VideoDetailPageProps): Promis
 }
 
 export default async function VideoDetailPage({ params, searchParams }: VideoDetailPageProps) {
-  const { videoId } = await params;
-  const sortParam = searchParams?.sort;
-  const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt'; 
+  const { videoId } = params; // Corrected: No await for params
 
-  
-  const [video, allVideoListItems] = await Promise.all([
-    fetchVideoByVideoId(videoId),
-    fetchAllVideos({
-      sort: currentSort,
-      fields: ['Id', 'VideoID', 'Title'], 
-      
-    }),
-  ]);
+  // Fetch primary video data first to ensure an await before searchParams access
+  const video = await fetchVideoByVideoId(videoId);
 
+  // Check for video immediately after fetching. If not found, the rest of the component won't run.
+  // This 'if' block was originally later, but it's fine here after 'video' is fetched.
+  // The notFound() call itself will prevent further execution if video is null.
   if (!video) {
     notFound();
   }
 
+  // Now that an await has occurred (for fetchVideoByVideoId), we can safely access searchParams
+  const sortParam = searchParams?.sort;
+  const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt';
+
+  // Then fetch the list that depends on the sort order
+  // Note: 'video' will be defined here due to the notFound() check above.
+  const allVideoListItems = await fetchAllVideos({
+    sort: currentSort,
+    fields: ['Id', 'VideoID', 'Title'], // Kept fields consistent with original
+  });
+
+  // The if (!video) check was here, but it's now redundant as it's performed earlier.
   
   const validVideoListItems = Array.isArray(allVideoListItems) ? allVideoListItems : [];
 

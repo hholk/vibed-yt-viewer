@@ -1,103 +1,168 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# YouTube Video Viewer
 
-## Getting Started
+A modern, responsive web application for browsing, searching, and interacting with a collection of YouTube videos. Built with Next.js 13+ (App Router), TypeScript, Tailwind CSS, and shadcn/ui components. The application connects to a NocoDB backend for data storage and management.
 
-First, run the development server:
+## 🚀 Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Video Gallery**: Browse videos in a responsive grid layout
+- **Detailed Video View**: View comprehensive video details including transcripts, summaries, and metadata
+- **Interactive Rating**: Rate videos using a 5-star rating system
+- **Personal Notes**: Add and edit personal comments for each video
+- **Markdown Support**: Rich text formatting for video descriptions and summaries
+- **Responsive Design**: Works on desktop and mobile devices
+- **Type Safety**: Built with TypeScript for better developer experience
+- **Modern UI**: Clean, accessible interface built with shadcn/ui components
+- **Server Components**: Optimized performance with Next.js 13+ App Router
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛠️ Tech Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Framework**: Next.js 13+ (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **UI Components**: shadcn/ui
+- **State Management**: React Context + React Query (optional)
+- **Form Handling**: React Hook Form
+- **Data Validation**: Zod
+- **API Client**: Axios
+- **Testing**: Vitest, React Testing Library
+- **Linting**: ESLint, Prettier
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📦 Prerequisites
 
-## NocoDB API Client
+- Node.js 18.0.0 or later
+- pnpm (recommended) or npm/yarn
+- NocoDB instance (or compatible REST API)
 
-This project includes a client to fetch data from a NocoDB instance, specifically designed to retrieve video records from a table named `youtubeTranscripts` (configurable).
+## 🚀 Getting Started
 
-### Features
-- **Video Rating**: Rate videos on a 5-star scale with an interactive star rating component.
-- **Personal Notes**: Add and edit personal comments for each video with a rich text editor.
-- **Auto-save**: Changes to ratings and comments are automatically saved to the database.
-- **Video Records**: Fetches video records using Axios from a NocoDB v1 API endpoint (e.g., `/api/v1/db/data/noco/<projectId>/<tableName>`).
-- **Data Validation**: Validates API responses using Zod schemas (`VideoSchema` in `src/lib/nocodb.ts`) to ensure data integrity.
-  - The schema correctly handles various field types. For fields like `ThumbHigh` (which NocoDB returns as an array of attachment objects), it uses `z.preprocess` to transform the input into a usable format (e.g., a single URL string or `null`).
-  - Includes robust preprocessing for fields where NocoDB might return newline-separated strings instead of arrays (e.g., `MemorableQuotes`, `Indicators`, `Hashtags`), converting them to the expected array format (e.g., `string[]` or `LinkedRecordItemSchema[]`) before final validation. This ensures robustness against variations in API data structures for multi-value fields.
-  - Optional fields are defined to default to `null` if not provided by the API.
-- **Configuration**: Configured via environment variables for NocoDB URL, API token, and table name.
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/yt-viewer.git
+   cd yt-viewer
+   ```
 
-### Environment Variables
+2. **Install dependencies**
+   ```bash
+   pnpm install
+   ```
 
-To connect to your NocoDB instance, create a `.env.local` file in the project root with the following variables:
+3. **Set up environment variables**
+   Create a `.env.local` file in the project root with the following variables:
+   ```env
+   # NocoDB Configuration
+   NEXT_PUBLIC_NC_URL=http://your-nocodb-instance:8080
+   NC_TOKEN=your-nocodb-api-token
+   NEXT_PUBLIC_NOCODB_TABLE_NAME=youtubeTranscripts
+   
+   # Optional: Customize these if needed
+   # NEXT_PUBLIC_NC_PROJECT_ID=phk8vxq6f1ev08h
+   ```
 
-```env
-NEXT_PUBLIC_NC_URL=http://your-nocodb-instance-url
-NC_TOKEN=your-nocodb-api-token
-NEXT_PUBLIC_NOCODB_TABLE_NAME=your_table_name # Optional, defaults to 'youtubeTranscripts'
-```
+4. **Start the development server**
+   ```bash
+   pnpm dev
+   ```
 
-- `NEXT_PUBLIC_NC_URL`: The base URL of your NocoDB instance (e.g., `http://localhost:8080`).
-- `NC_TOKEN`: Your NocoDB API token. This is kept server-side.
-- `NEXT_PUBLIC_NOCODB_TABLE_NAME`: The name of the table to fetch records from. Defaults to `youtubeTranscripts` if not set.
+5. **Open your browser**
+   Visit [http://localhost:3000](http://localhost:3000) to see the application in action.
 
-**Important:** Restart your development server (`pnpm dev`) after creating or modifying `.env.local` for the changes to take effect.
+## 🧪 Running Tests
 
-### Testing
-
-The NocoDB client includes unit tests using Vitest. These tests mock Axios responses to verify:
-- Successful data fetching and parsing.
-- Correct Zod schema validation.
-- Handling of API errors and invalid data structures.
-- Graceful error handling for missing environment variables.
-
-To run the tests:
-
-```bash
-pnpm test src/lib/nocodb.test.ts
-```
-
-Or run all tests:
-
+Run the full test suite:
 ```bash
 pnpm test
 ```
 
-## Video List Page
-
-The project includes a server component to display a list of videos fetched from the NocoDB instance.
-
-**Location:** `src/app/video-list-page.tsx`
-
-### Features
-- **Server-Side Rendering:** Implemented as a Next.js Server Component for optimal performance and SEO.
-- **Data Fetching:** Uses the `fetchVideos` function from `src/lib/nocodb.ts` to retrieve video data.
-- **Responsive Grid Layout:** Displays videos in a responsive grid that adapts to different screen sizes (using Tailwind CSS: `grid-cols-[repeat(auto-fill,minmax(200px,1fr))]`).
-- **Optimized Images:** Leverages `next/image` for optimized loading and display of video thumbnails.
-- **Error Handling:** Includes basic error handling to display a message if the API call fails.
-- **Empty State:** Shows a user-friendly message if no videos are found.
-
-### Testing
-The Video List Page is tested using Vitest and React Testing Library. Tests are located in `src/app/video-list-page.test.tsx` and cover:
-- Correct rendering of video items when data is successfully fetched.
-- Display of an error message when `fetchVideos` simulates a failure.
-- Display of a "no videos" message when `fetchVideos` returns an empty list.
-- Correct rendering of video thumbnails and titles.
-
-To run tests specific to this page:
+Run tests in watch mode:
 ```bash
-pnpm test src/app/video-list-page.test.tsx
+pnpm test:watch
 ```
 
-## Video Detail Page
+Run tests with coverage:
+```bash
+pnpm test:coverage
+```
+
+## 🏗️ Project Structure
+
+```
+yt-viewer/
+├── src/
+│   ├── app/                    # Next.js 13+ App Router
+│   │   ├── (main)/             # Main application routes
+│   │   │   ├── page.tsx        # Home page
+│   │   │   └── video/          # Video-related routes
+│   │   │       └── [videoId]/  # Dynamic route for individual videos
+│   │   │           ├── page.tsx
+│   │   │           └── VideoDetailPageContent.tsx
+│   │   ├── globals.css         # Global styles
+│   │   └── layout.tsx          # Root layout
+│   ├── components/             # Reusable UI components
+│   │   ├── StarRating.tsx      # Interactive star rating component
+│   │   ├── SortDropdown.tsx    # Video sorting controls
+│   │   ├── VideoCard.tsx       # Video thumbnail card
+│   │   └── ui/                 # shadcn/ui components
+│   ├── lib/
+│   │   ├── nocodb.ts         # NocoDB API client
+│   │   └── utils.ts           # Utility functions
+│   └── types/                 # TypeScript type definitions
+├── public/                    # Static assets
+├── .env.example              # Example environment variables
+├── next.config.js            # Next.js configuration
+├── tailwind.config.js        # Tailwind CSS configuration
+└── package.json              # Project dependencies and scripts
+```
+
+## 🔧 NocoDB Configuration
+
+The application is designed to work with a NocoDB instance with the following requirements:
+
+### Required Table: `youtubeTranscripts`
+
+**Key Fields**:
+- `Id` (AutoNumber) - Unique identifier
+- `VideoID` (String) - YouTube video ID
+- `Title` (String) - Video title
+- `ThumbHigh` (Attachment) - Video thumbnail URL
+- `Channel` (String) - Channel name
+- `ImportanceRating` (Number) - User rating (1-5)
+- `PersonalComment` (LongText) - User's personal notes
+- `CreatedAt` (DateTime) - Record creation date
+- `UpdatedAt` (DateTime) - Last update date
+- `PublishedAt` (DateTime) - Video publication date
+- `FullTranscript` (LongText) - Full video transcript
+- `TLDR` (LongText) - Brief summary
+- `MainSummary` (LongText) - Detailed summary
+- `ActionableAdvice` (LongText) - Actionable insights
+- `MemorableQuotes` (JSON) - Array of notable quotes
+- `MemorableTakeaways` (JSON) - Key takeaways
+
+## 📝 Code Style
+
+- **TypeScript**: Strict mode enabled
+- **Formatting**: Prettier with default settings
+- **Linting**: ESLint with recommended rules
+- **Imports**: Absolute imports with `@/` prefix
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [Next.js](https://nextjs.org/) - The React Framework for Production
+- [Tailwind CSS](https://tailwindcss.com/) - A utility-first CSS framework
+- [shadcn/ui](https://ui.shadcn.com/) - Beautifully designed components
+- [NocoDB](https://www.nocodb.com/) - Open Source Airtable Alternative
+- [Lucide Icons](https://lucide.dev/) - Beautiful & consistent icons
 
 The project features a dedicated page for viewing detailed information about a specific video, accessible by navigating from the video list page (e.g., `/video/[videoId]` URLs).
 
@@ -150,18 +215,3 @@ The project features a custom dark theme and specific typography to enhance user
 
 *   **NocoDB Zod Parsing Errors:**
     *   If you encounter Zod parsing errors related to NocoDB data types, ensure the schemas in `src/lib/nocodb.ts` match the actual data structure returned by your NocoDB API. For example, the `Sentiment` field was initially expected as a string but returned as a number, requiring a schema update from `z.string()` to `z.number()`.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
