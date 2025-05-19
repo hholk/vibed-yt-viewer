@@ -1,5 +1,4 @@
-// Type definitions for Next.js
-// Project: https://nextjs.org/
+
 
 declare module 'next/link' {
   import { ComponentType, HTMLAttributes } from 'react';
@@ -59,7 +58,6 @@ declare module 'next/image' {
   export default Image;
 }
 
-// Global types for Next.js
 declare namespace NodeJS {
   interface ProcessEnv {
     NODE_ENV: 'development' | 'production' | 'test';
@@ -69,17 +67,11 @@ declare namespace NodeJS {
   }
 }
 
-// This is needed for TypeScript to recognize the global JSX namespace
 declare global {
   namespace JSX {
     interface IntrinsicElements {
-      // Add any custom elements here
+      
     }
   }
 }
 
-/// <reference types="next" />
-/// <reference types="next/image-types/global" />
-
-// NOTE: This file should not be edited
-// see https://nextjs.org/docs/basic-features/typescript for more information.

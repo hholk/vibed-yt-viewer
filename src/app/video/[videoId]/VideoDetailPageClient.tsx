@@ -6,18 +6,13 @@ import { VideoDetailPageContent } from "./VideoDetailPageContent";
 interface VideoDetailPageClientProps {
   videoId: string;
   allVideos: VideoListItem[];
-  initialVideo?: Video | null; // for hydration, optional
+  initialVideo?: Video | null; 
 }
 
-// SWR fetcher for video detail
 const fetcher = (videoId: string) => fetchVideoByVideoId(videoId);
 
-/**
- * Client component that uses SWR to fetch and cache video detail data.
- * This enables robust caching and preloading for video details.
- */
 export default function VideoDetailPageClient({ videoId, allVideos, initialVideo }: VideoDetailPageClientProps) {
-  // Use SWR for caching and revalidation
+  
   const { data: video, error, isLoading } = useSWR(
     ["video-detail", videoId],
     () => fetcher(videoId),

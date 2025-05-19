@@ -9,7 +9,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'; // Assuming select is already added
+} from '@/components/ui/select'; 
 
 const SORT_STORAGE_KEY = 'yt-viewer-sort-preference';
 
@@ -36,7 +36,7 @@ export function SortDropdown() {
   const searchParams = useSearchParams();
   const [isClient, setIsClient] = useState(false);
   
-  // Get initial sort from URL or sessionStorage, default to '-CreatedAt'
+  
   const getInitialSort = () => {
     if (typeof window === 'undefined') return '-CreatedAt';
     return searchParams.get('sort') || 
@@ -46,7 +46,7 @@ export function SortDropdown() {
   
   const [currentSort, setCurrentSort] = useState<string>(getInitialSort());
   
-  // Update URL and sessionStorage when sort changes
+  
   const handleSortChange = (value: string) => {
     setCurrentSort(value);
     sessionStorage.setItem(SORT_STORAGE_KEY, value);
@@ -60,12 +60,12 @@ export function SortDropdown() {
     router.push(`/?${params.toString()}`);
   };
   
-  // Set isClient to true after component mounts to avoid hydration issues
+  
   useEffect(() => {
     setIsClient(true);
   }, []);
   
-  // Sync URL sort param with sessionStorage on initial load
+  
   useEffect(() => {
     if (isClient && searchParams.get('sort') && searchParams.get('sort') !== currentSort) {
       const sort = searchParams.get('sort');

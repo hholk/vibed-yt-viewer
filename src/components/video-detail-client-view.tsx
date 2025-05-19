@@ -1,16 +1,14 @@
-// src/components/video-detail-client-view.tsx
+
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation'; // Removed useSearchParams as it's not directly used for navigation URL construction here
+import { useRouter } from 'next/navigation'; 
 import Link from 'next/link';
 import Image from 'next/image';
 import { type Video } from '@/lib/nocodb'; 
 import { Badge } from '@/components/ui/badge';
 import { Star, ArrowLeftCircle, ArrowRightCircle } from 'lucide-react';
 
-// Define a minimal type for the allVideos list for navigation
-// Includes fields necessary for sorting + Id and VideoID
 export type NavVideo = {
   Id: number;
   VideoID: string;
@@ -21,14 +19,12 @@ export type NavVideo = {
   UpdatedAt?: Date | null;
 };
 
-
 interface VideoDetailClientViewProps {
   video: Video;
   allVideos: NavVideo[]; 
   currentSort: string;
 }
 
-// Helper to render a list of items (strings or linked records) as badges
 const renderBadgeList = (
   items: (string | { Title?: string | null; name?: string | null } | undefined)[] | null | undefined,
   label: string,
@@ -43,7 +39,7 @@ const renderBadgeList = (
       <h3 className="text-md font-semibold text-muted-foreground mb-1.5">{label}</h3>
       <div className="flex flex-wrap gap-1">
         {validItems.map((item, index) => {
-          // item is guaranteed to be non-null here due to prior filter
+          
           const content = typeof item === 'string' ? item : (item?.Title || item?.name || '');
           return (
             <Badge key={index} variant={variant}>
@@ -56,7 +52,6 @@ const renderBadgeList = (
   );
 };
 
-// Helper to render a simple string or number value
 const renderDetailItem = (label: string, value: React.ReactNode | string | number | null | undefined, className?: string) => {
   if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
   return (
@@ -67,7 +62,6 @@ const renderDetailItem = (label: string, value: React.ReactNode | string | numbe
   );
 };
 
-// Helper for star rating
 const renderStarRating = (rating: number | null | undefined) => {
   if (rating === null || rating === undefined) return renderDetailItem("Importance Rating", "Not Rated");
   return (
@@ -83,7 +77,6 @@ const renderStarRating = (rating: number | null | undefined) => {
   );
 };
 
-// Helper to render a list of strings
 const renderStringList = (items: string[] | null | undefined, label: string) => {
   if (!items || items.length === 0) return null;
   return (
@@ -96,7 +89,6 @@ const renderStringList = (items: string[] | null | undefined, label: string) => 
   );
 };
 
-// Helper to render a list of URLs
 const renderUrlList = (items: string[] | null | undefined, label: string) => {
   if (!items || items.length === 0) return null;
   return (
@@ -114,7 +106,6 @@ const renderUrlList = (items: string[] | null | undefined, label: string) => {
     </div>
   );
 };
-
 
 export default function VideoDetailClientView({ video, allVideos, currentSort }: VideoDetailClientViewProps) {
   const router = useRouter();
@@ -230,7 +221,7 @@ export default function VideoDetailClientView({ video, allVideos, currentSort }:
             <ul className="list-disc list-inside pl-2 space-y-0.5 text-base text-foreground">
               {video.DOIs.map((doi, idx) => (
                 <li key={idx}>
-                  <a href={`https://doi.org/${doi}`} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline break-all">
+                  <a href={`https:
                     {doi}
                   </a>
                 </li>

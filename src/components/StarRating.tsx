@@ -25,7 +25,7 @@ export function StarRating({ value, onChange, readOnly = false, size = 24 }: Sta
     }
   };
 
-  // Reset hover state when value changes (e.g., after save)
+  
   useEffect(() => {
     if (value !== null) {
       setHover(null);
@@ -34,7 +34,7 @@ export function StarRating({ value, onChange, readOnly = false, size = 24 }: Sta
 
   const starRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-  // Handle keyboard navigation
+  
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
     if (readOnly || isLoading) return;
 
@@ -58,7 +58,6 @@ export function StarRating({ value, onChange, readOnly = false, size = 24 }: Sta
         break;
     }
   };
-
 
   return (
     <div 

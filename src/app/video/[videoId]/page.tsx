@@ -25,15 +25,15 @@ export async function generateMetadata({ params }: VideoDetailPageProps): Promis
 export default async function VideoDetailPage({ params, searchParams }: VideoDetailPageProps) {
   const { videoId } = await params;
   const sortParam = searchParams?.sort;
-  const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt'; // Default sort from app/page.tsx
+  const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt'; 
 
-  // Fetch current video and the sorted list of all videos (minimal data for list)
+  
   const [video, allVideoListItems] = await Promise.all([
     fetchVideoByVideoId(videoId),
     fetchAllVideos({
       sort: currentSort,
-      fields: ['Id', 'VideoID', 'Title'], // Ensure fields for nav are present
-      // No specific schema needed here, as default will be fine, or rely on fetchAllVideos default
+      fields: ['Id', 'VideoID', 'Title'], 
+      
     }),
   ]);
 
@@ -41,12 +41,12 @@ export default async function VideoDetailPage({ params, searchParams }: VideoDet
     notFound();
   }
 
-  // Ensure allVideoListItems is an array
+  
   const validVideoListItems = Array.isArray(allVideoListItems) ? allVideoListItems : [];
 
-  // Find the current video's index in the sorted list
-  // Note: video is full Video object, allVideoListItems contains VideoListItems
-  // We need to match based on VideoID, as 'Id' might differ if schemas are misaligned or current video not in list initially
+  
+  
+  
   const currentVideoIndexInList = validVideoListItems.findIndex(item => item.VideoID === video.VideoID);
 
   let previousVideoData: { Id: string; Title: string | null } | null = null;
@@ -58,12 +58,12 @@ export default async function VideoDetailPage({ params, searchParams }: VideoDet
 
     if (prevItem?.VideoID) {
       previousVideoData = { Id: prevItem.VideoID, Title: prevItem.Title || null };
-      // Server-side pre-fetch (fire and forget - populates Next.js data cache if fetchVideoByVideoId uses fetch internally, or our videoCache)
+      
       fetchVideoByVideoId(prevItem.VideoID); 
     }
     if (nextItem?.VideoID) {
       nextVideoData = { Id: nextItem.VideoID, Title: nextItem.Title || null };
-      // Server-side pre-fetch
+      
       fetchVideoByVideoId(nextItem.VideoID);
     }
   }
@@ -71,7 +71,7 @@ export default async function VideoDetailPage({ params, searchParams }: VideoDet
   return (
     <VideoDetailPageContent 
       video={video} 
-      allVideos={validVideoListItems} // Pass the list items for potential other uses or future refactoring
+      allVideos={validVideoListItems} 
       previousVideo={previousVideoData}
       nextVideo={nextVideoData}
     />

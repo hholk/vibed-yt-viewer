@@ -11,15 +11,15 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
   try {
     const resolvedSearchParams = await searchParamsPromise;
     const sortParam = resolvedSearchParams.sort;
-    const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt'; // Default sort
-    // Fetch all videos but only specific fields for the list view
+    const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt'; 
+    
     const fetchedVideosData = await fetchAllVideos({
       sort: currentSort,
-      fields: ['Id', 'Title', 'ThumbHigh', 'Channel', 'VideoID'], // Ensure 'Id' & 'VideoID' are fetched
+      fields: ['Id', 'Title', 'ThumbHigh', 'Channel', 'VideoID'], 
       schema: videoListItemSchema,
     });
     videos = fetchedVideosData;
-    // pageInfo could be used here if pagination controls were added to the main page
+    
   } catch (e: unknown) {
     console.error('Failed to fetch videos:', e);
     error = e instanceof Error ? e.message : 'An unknown error occurred while fetching videos.';
@@ -62,7 +62,7 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
           <VideoCard 
             key={video.Id} 
             video={video} 
-            priority={index === 0} // Only set priority for the first image to improve LCP
+            priority={index === 0} 
           />
         ))}
       </div>

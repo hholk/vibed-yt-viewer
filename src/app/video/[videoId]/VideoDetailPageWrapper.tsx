@@ -3,7 +3,6 @@
 import dynamic from 'next/dynamic';
 import type { Video, VideoListItem } from '@/lib/nocodb';
 
-// Simple Skeleton component for loading state
 const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div 
     className={`animate-pulse bg-neutral-800 rounded-md ${className || ''}`}
@@ -16,7 +15,6 @@ interface VideoDetailPageWrapperProps {
   allVideos: VideoListItem[];
 }
 
-// Dynamically import the VideoDetailPageContent component with no SSR
 const VideoDetailPageContent = dynamic<VideoDetailPageWrapperProps>(
   () => import('./VideoDetailPageContent'),
   { 

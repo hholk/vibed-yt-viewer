@@ -1,10 +1,8 @@
 import axios from 'axios';
 import { z } from 'zod';
 
-// Simple in-memory cache for video data
 const videoCache = new Map<string, Promise<Video | null>>();
 
-// Schema for NocoDB attachment field (like ThumbHigh)
 const nocoDBAttachmentSchema = z.object({
   url: z.string().url(),
   id: z.string().optional(),
@@ -16,72 +14,67 @@ const nocoDBAttachmentSchema = z.object({
 }).passthrough();
 export type NocoDBAttachment = z.infer<typeof nocoDBAttachmentSchema>;
 
-// Helper preprocessor to convert empty non-array objects to null
 const emptyObjectToNull = (val: unknown) => (typeof val === 'object' && val !== null && !Array.isArray(val) && Object.keys(val).length === 0 ? null : val);
 
-// Preprocessor to convert newline-separated string to array of strings, or pass through if already array/null
 const stringToArrayOrNullPreprocessor = (val: unknown): string[] | null => {
   if (typeof val === 'string') {
-    if (val.trim() === '') return []; // Handle empty or whitespace-only strings as empty array
+    if (val.trim() === '') return []; 
     return val.split('\n').map(s => s.trim()).filter(s => s !== '');
   }
-  if (Array.isArray(val)) { // If it's already an array, pass it through
-    return val as string[]; // Subsequent Zod schema will validate elements
+  if (Array.isArray(val)) { 
+    return val as string[]; 
   }
-  if (typeof val === 'object' && val !== null && Object.keys(val).length === 0) { // Empty object from NocoDB
+  if (typeof val === 'object' && val !== null && Object.keys(val).length === 0) { 
     return [];
   }
-  return null; // For other types or if it's explicitly null/undefined
+  return null; 
 };
 
-// Preprocessor to convert newline-separated string to array of LinkedRecordItemSchema-like objects
 const stringToLinkedRecordArrayPreprocessor = (val: unknown): Array<{ Id?: any; Title?: string | null; name?: string | null }> | null => {
   if (typeof val === 'string') {
     if (val.trim() === '') return [];
     return val.split('\n').map(s => s.trim()).filter(s => s !== '').map(itemTitle => ({ Title: itemTitle, name: itemTitle }));
   }
-  if (Array.isArray(val)) { // If it's already an array of objects
+  if (Array.isArray(val)) { 
     return val;
   }
-  if (typeof val === 'object' && val !== null && Object.keys(val).length === 0) { // Empty object from NocoDB
+  if (typeof val === 'object' && val !== null && Object.keys(val).length === 0) { 
     return [];
   }
   return null;
 };
 
-// Schema for items in NocoDB LinkToAnotherRecord fields
 const linkedRecordItemSchema = z.object({
-  Id: z.any().optional(), // NocoDB usually sends Id as number
-  Title: z.string().optional().nullable(), // Common display field
-  name: z.string().optional().nullable(),  // Alternative display field for tags/categories
-  // NocoDB might include other fields from the linked record, .passthrough() allows them
+  Id: z.any().optional(), 
+  Title: z.string().optional().nullable(), 
+  name: z.string().optional().nullable(),  
+  
 }).passthrough();
 
-// Zod Schema for a single video record (all fields for detailed view)
 export const videoSchema = z.object({
   Id: z.number().int(),
   VideoID: z.string(),
   URL: z.string().url().optional().nullable(),
   ThumbHigh: z.preprocess(
     (val) => {
-      // Check if val is an array, has at least one element, that element is an object, and has a string 'url' property
+      
       if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object' && val[0] !== null && typeof val[0].url === 'string') {
         try {
-          // Validate if val[0].url is a valid URL format.
+          
           const parsedUrl = new URL(val[0].url);
           if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
-            return val[0].url; // Return the URL string
+            return val[0].url; 
           }
-          return null; // Not a http/https URL
+          return null; 
         } catch (e) {
-          // console.warn("ThumbHigh preprocess: URL parsing failed for", val[0].url, e);
-          return null; // URL parsing failed, treat as null
+          
+          return null; 
         }
       }
-      // If val is null or undefined, or an empty array, or doesn't match the structure, return null.
+      
       return null;
     },
-    z.string().url().nullable() // The schema for the preprocessed value
+    z.string().url().nullable() 
   ),
   Title: z.string(),
   Channel: z.string().optional().nullable().default(null),
@@ -108,12 +101,12 @@ export const videoSchema = z.object({
   Duration: z.number().optional().nullable().default(null),
   MemorableQuotes: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
   MemorableTakeaways: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
-  // Corrected and added fields for detailed view (Task: Video Detail View Enhancement)
+  
   Notes: z.string().optional().nullable().default(null),
   Watched: z.boolean().optional().nullable().default(null),
   OriginalTitle: z.string().optional().nullable().default(null),
   OriginalChannel: z.string().optional().nullable().default(null),
-  // Companies: z.preprocess(emptyObjectToNull, z.array(linkedRecordItemSchema).nullable().default([]).optional()), // Covered by CompaniesOrProjects if that exists or add if not
+  
   Indicators: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   Trends: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   Locations: z.preprocess(emptyObjectToNull, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
@@ -135,10 +128,10 @@ export const videoSchema = z.object({
   Status: z.string().optional().nullable().default(null),
   Subtitles: z.union([z.boolean(), z.preprocess(emptyObjectToNull, z.array(z.string()))]).optional().nullable().default(null),
   Speakers: z.preprocess(emptyObjectToNull, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
-  Transcript: z.string().optional().nullable().default(null), // Short transcript
+  Transcript: z.string().optional().nullable().default(null), 
 
-  // Fields specifically requested for detailed view - ensuring no duplicates and correct types
-  KeyNumbersData: z.unknown().optional().nullable().default(null), // More permissive for potential JSON object/array
+  
+  KeyNumbersData: z.unknown().optional().nullable().default(null), 
   KeyExamples: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
   BookMediaRecommendations: z.preprocess(emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
   RelatedURLs: z.preprocess(emptyObjectToNull, z.array(z.string().url()).nullable().default([]).optional()),
@@ -146,12 +139,12 @@ export const videoSchema = z.object({
   Persons: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   Companies: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   InvestableAssets: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
-  TickerSymbol: z.string().optional().nullable().default(null), // For $Ticker, replacing previous 'Ticker' array
+  TickerSymbol: z.string().optional().nullable().default(null), 
   Institutions: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   EventsFairs: z.preprocess(emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
   DOIs: z.preprocess(emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
   PrimarySources: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
-  // Sentiment can be a string or number, but we'll convert it to a number
+  
   Sentiment: z.preprocess(
     (val) => {
       if (val === null || val === undefined) return null;
@@ -163,16 +156,15 @@ export const videoSchema = z.object({
   SentimentReason: z.string().optional().nullable().default(null),
   TechnicalTerms: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
 
-  Prompt: z.string().optional().nullable().default(null), // Assuming prompt is a string
-  // Fields like nc___, __nc_evolve_to_text__, "Created By", "Updated By" are NocoDB internal or less frequently used directly
+  Prompt: z.string().optional().nullable().default(null), 
+  
   nc___: z.unknown().optional(),
   __nc_evolve_to_text__: z.unknown().optional(),
   "Created By": z.string().optional().nullable(),
   "Updated By": z.string().optional().nullable(),
-}).catchall(z.unknown()).describe('videoSchema_detailed'); // Allows other fields not explicitly defined
+}).catchall(z.unknown()).describe('videoSchema_detailed'); 
 export type Video = z.infer<typeof videoSchema>;
 
-// Zod Schema for a video list item (minimal fields for grid view)
 export const videoListItemSchema = z.object({
   Id: z.number().int(),
   Title: z.string(),
@@ -181,19 +173,18 @@ export const videoListItemSchema = z.object({
       if (Array.isArray(val) && val.length > 0 && val[0] && typeof val[0].url === 'string') {
         return val[0].url;
       }
-      if (typeof val === 'string') { // Keep support if it's already a string
+      if (typeof val === 'string') { 
         return val;
       }
       return null;
     },
     z.string().url().nullable()
-  ), // Handles NocoDB attachment array or direct string URL
+  ), 
   Channel: z.string().optional().nullable(),
-  VideoID: z.string(), // Essential for linking to the video detail page
+  VideoID: z.string(), 
 }).describe('videoListItemSchema_grid');
 export type VideoListItem = z.infer<typeof videoListItemSchema>;
 
-// Zod Schema for NocoDB page information (remains the same)
 const pageInfoSchema = z.object({
   totalRows: z.number().int(),
   page: z.number().int(),
@@ -205,13 +196,11 @@ const pageInfoSchema = z.object({
 });
 export type PageInfo = z.infer<typeof pageInfoSchema>;
 
-// Generic Zod Schema factory for the NocoDB API list response structure
 const createNocoDBResponseSchema = <T extends z.ZodTypeAny>(itemSchema: T) => z.object({
   list: z.array(itemSchema),
   pageInfo: pageInfoSchema,
 });
 
-// Exported generic NocoDBResponse type
 export type NocoDBResponse<T> = {
   list: T[];
   pageInfo: PageInfo;
@@ -223,12 +212,6 @@ const apiClient = axios.create({
 
 const DEFAULT_PAGE_SIZE = 25;
 
-/**
- * Updates a video record in NocoDB.
- * @param recordId The ID of the record to update
- * @param data The data to update
- * @returns The updated record
- */
 export async function updateVideo(
   recordId: number,
   data: Partial<z.infer<typeof videoSchema>>,
@@ -245,7 +228,7 @@ export async function updateVideo(
   }
 
   try {
-    // Create a new instance of axios for this request to ensure fresh headers
+    
     const client = axios.create({
       baseURL: currentNcUrl,
       headers: {
@@ -259,7 +242,7 @@ export async function updateVideo(
       data
     );
 
-    // Validate the response against our schema
+    
     const parsed = videoSchema.safeParse(response.data);
     if (!parsed.success) {
       console.error('NocoDB API response validation failed:', parsed.error);
@@ -279,15 +262,11 @@ interface FetchVideosOptions<T extends z.ZodTypeAny> {
   page?: number;
   fields?: string[];
   schema?: T;
-  // Add ncProjectId and ncTableName to allow override, though usually from env
+  
   ncProjectId?: string;
   ncTableName?: string;
 }
 
-/**
- * Fetches a single page of records from NocoDB.
- * Intended for server-side use.
- */
 export async function fetchVideos<T extends z.ZodTypeAny = typeof videoSchema>(
   options?: FetchVideosOptions<T>
 ): Promise<{ videos: z.infer<T>[]; pageInfo: PageInfo }> {
@@ -304,7 +283,7 @@ export async function fetchVideos<T extends z.ZodTypeAny = typeof videoSchema>(
   const limit = options?.limit || DEFAULT_PAGE_SIZE;
   const page = options?.page || 1;
   const offset = (page - 1) * limit;
-  const schemaToUse = options?.schema || videoSchema; // Default to full videoSchema if no specific schema provided
+  const schemaToUse = options?.schema || videoSchema; 
   const responseSchema = createNocoDBResponseSchema(schemaToUse);
 
   const params: Record<string, any> = {
@@ -319,7 +298,7 @@ export async function fetchVideos<T extends z.ZodTypeAny = typeof videoSchema>(
 
   if (options?.fields && options.fields.length > 0) {
     params.fields = options.fields.join(',');
-  } // If fields is empty or not provided, NocoDB usually returns all fields for list views.
+  } 
 
   try {
     const response = await apiClient.get(
@@ -334,7 +313,7 @@ export async function fetchVideos<T extends z.ZodTypeAny = typeof videoSchema>(
 
     if (!parsedResponse.success) {
       console.error(`Failed to parse NocoDB response (Page: ${page}, Limit: ${limit}, Fields: ${params.fields || 'all'}, Schema: ${schemaToUse.description || 'videoSchema'}):`, parsedResponse.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
-      // console.error('Problematic NocoDB data:', JSON.stringify(response.data, null, 2));
+      
       throw new Error(`Failed to parse NocoDB API response for page ${page}.`);
     }
     return { videos: parsedResponse.data.list as z.infer<T>[], pageInfo: parsedResponse.data.pageInfo };
@@ -349,13 +328,8 @@ export async function fetchVideos<T extends z.ZodTypeAny = typeof videoSchema>(
   }
 }
 
-/**
- * Fetches a single video record from NocoDB by its VideoID (which is a string field).
- * Fetches all fields for the video.
- * Uses an in-memory cache to prevent redundant API calls for the same video ID.
- */
 export function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: string, ncTableNameParam?: string): Promise<Video | null> {
-  // Check if we already have a pending or resolved promise for this videoId
+  
   if (videoCache.has(videoId)) {
     return videoCache.get(videoId)!;
   }
@@ -370,25 +344,25 @@ export function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: string, 
     throw new Error('NocoDB credentials not configured.');
   }
 
-  // Create a promise for this video fetch and store it in the cache
+  
   const fetchPromise = (async () => {
     try {
       const response = await apiClient.get(
         `${currentNcUrl}/api/v1/db/data/noco/${projectId}/${tableName}/find-one`,
         {
           headers: { 'xc-token': currentNcToken },
-          params: { // No 'fields' param here to fetch all fields for the single record
+          params: { 
             where: `(VideoID,eq,${videoId})`,
           },
         }
       );
 
-      // Log the raw response data for debugging
+      
       console.log(`[fetchVideoByVideoId - ${videoId}] Raw NocoDB response data:`, JSON.stringify(response.data, null, 2));
 
       if (!response.data || Object.keys(response.data).length === 0) {
         console.warn(`[fetchVideoByVideoId - ${videoId}] No data returned from NocoDB or data is empty object.`);
-        return null; // Not found
+        return null; 
       }
 
       const parsedVideo = videoSchema.safeParse(response.data);
@@ -400,7 +374,7 @@ export function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: string, 
       }
       return parsedVideo.data;
     } catch (error: any) {
-      // Remove from cache on error to allow retries
+      
       videoCache.delete(videoId);
       
       if (axios.isAxiosError(error) && error.response?.status === 404) {
@@ -415,10 +389,10 @@ export function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: string, 
     }
   })();
 
-  // Store the promise in the cache before returning it
+  
   videoCache.set(videoId, fetchPromise);
   
-  // Return the promise that will resolve to the video data
+  
   return fetchPromise;
 }
 
@@ -426,27 +400,24 @@ interface FetchAllVideosOptions<T extends z.ZodTypeAny> {
   sort?: string;
   fields?: string[];
   schema?: T;
-  // Allow override for project/table, though usually from env
+  
   ncProjectId?: string;
   ncTableName?: string;
 }
 
-/**
- * Fetches ALL records from NocoDB, handling pagination.
- */
 export async function fetchAllVideos<T extends z.ZodTypeAny = typeof videoSchema>(
   options?: FetchAllVideosOptions<T>
 ): Promise<z.infer<T>[]> {
   const allItems: z.infer<T>[] = [];
   let currentPage = 1;
-  const pageSize = options?.fields ? 50 : DEFAULT_PAGE_SIZE; // Use larger page size if specific fields are requested
+  const pageSize = options?.fields ? 50 : DEFAULT_PAGE_SIZE; 
   let hasMorePages = true;
 
   const fetchOptions: FetchVideosOptions<T> = {
     sort: options?.sort,
     limit: pageSize,
     fields: options?.fields,
-    schema: options?.schema || (videoSchema as unknown as T), // Default to full video schema if not specified
+    schema: options?.schema || (videoSchema as unknown as T), 
     ncProjectId: options?.ncProjectId,
     ncTableName: options?.ncTableName,
   };
@@ -473,13 +444,3 @@ export async function fetchAllVideos<T extends z.ZodTypeAny = typeof videoSchema
   return allItems;
 }
 
-/*
-==========================================
-IMPORTANT: Environment Variable Setup
-==========================================
-...
-(Content of this comment block remains the same)
-NEXT_PUBLIC_NOCODB_PROJECT_ID=phk8vxq6f1ev08h (or your actual project ID if different from the default used in code)
-...
-==========================================
-*/
