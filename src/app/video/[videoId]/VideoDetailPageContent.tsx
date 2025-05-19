@@ -14,8 +14,54 @@ export type { Video, VideoListItem } from '@/lib/nocodb';
 type SafeReactMarkdownProps = {
   children: string;
 };
+// Function to clean up markdown content
+const cleanMarkdownContent = (content: string): string => {
+  if (!content) return content;
+  
+  // Handle JSON array format (e.g., ["- quote1", "- quote2"])
+  try {
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed)) {
+      // Clean each item in the array and join with double newlines
+      return parsed
+        .map(item => {
+          // Remove any leading/trailing quotes and whitespace
+          let cleanItem = String(item).trim()
+            .replace(/^["']|["']$/g, '')  // Remove surrounding quotes
+            .replace(/^\s*-\s*/, '')       // Remove leading bullet point
+            .trim();
+          return cleanItem;
+        })
+        .filter(Boolean) // Remove any empty strings
+        .join('\n\n');
+    }
+  } catch (e: unknown) {
+    // Not a JSON string, continue with other cleaning
+  }
+  
+  // Clean up the content if it's not a JSON array
+  return content
+    .replace(/^\s*\[\s*/g, '')        // Remove opening [
+    .replace(/\s*\]\s*$/g, '')        // Remove closing ]
+    .replace(/"\s*,\s*"/g, '\n')     // Replace "," with newlines
+    .replace(/[\r\n]+/g, '\n')        // Normalize line endings
+    .split('\n')                      // Split into lines
+    .map(line => 
+      line
+        .replace(/^\s*["-]\s*/, '')  // Remove leading "- or -
+        .replace(/^\s*\d+\.?\s*/, '') // Remove leading numbers like "1. "
+        .replace(/"$/g, '')           // Remove trailing quotes
+        .trim()
+    )
+    .filter(Boolean)                  // Remove empty lines
+    .join('\n\n')                    // Join with double newlines
+    .replace(/\n{3,}/g, '\n\n')       // Normalize multiple newlines
+    .trim();
+};
+
 const SafeReactMarkdown = ({ children }: SafeReactMarkdownProps) => {
-  return <ReactMarkdown>{children}</ReactMarkdown>;
+  const cleanedContent = cleanMarkdownContent(children);
+  return <ReactMarkdown>{cleanedContent}</ReactMarkdown>;
 };
 
 type FieldValue = string | number | boolean | Date | string[] | Record<string, unknown> | Record<string, unknown>[] | null | undefined;
@@ -101,6 +147,65 @@ const DetailItem = React.memo<DetailItemProps>(({
       return <span className="text-sm text-neutral-500 italic">N/A</span>;
     }
     
+    // Handle array values first
+    if (Array.isArray(value) || (typeof value === 'string' && value.trim().startsWith('['))) {
+      let items: string[] = [];
+      
+      // If it's already an array, use it directly
+      if (Array.isArray(value)) {
+        items = value.map(item => 
+          typeof item === 'object' && item !== null && 'Title' in item 
+            ? String((item as { Title: string }).Title)
+            : String(item)
+        );
+      } 
+      // If it's a string that looks like a JSON array, try to parse it
+      else if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) {
+            items = parsed.map(String);
+          } else {
+            items = [String(parsed)];
+          }
+        } catch (e) {
+          // If parsing fails, treat it as a regular string
+          items = [value];
+        }
+      }
+      
+      // Clean up each item
+      items = items.map(item => 
+        item
+          .replace(/^\s*[\[\]"\-]\s*/, '')  // Remove leading [ " - characters
+          .replace(/[\]"\-]\s*$/, '')       // Remove trailing ] " - characters
+          .trim()
+      );
+      
+      // If we're in markdown mode, join with double newlines
+      if (isMarkdown) {
+        return (
+          <div className="prose prose-invert prose-neutral prose-sm max-w-none markdown-box">
+            <SafeReactMarkdown>
+              {items.join('\n\n')}
+            </SafeReactMarkdown>
+          </div>
+        );
+      }
+      
+      // Otherwise render as a list
+      return (
+        <ul className="list-disc pl-5 space-y-1">
+          {items.map((item, index) => (
+            <li key={index} className="text-neutral-200">
+              {item}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    
+    // Handle markdown content
     if (isMarkdown && typeof value === 'string') { 
       return (
         <div className="prose prose-invert prose-neutral prose-sm max-w-none markdown-box">
@@ -111,17 +216,18 @@ const DetailItem = React.memo<DetailItemProps>(({
       );
     }
 
+    // Handle images
     if (isImage && typeof value === 'string' && value) {
-      
       return <img src={value} alt={label} className="max-w-xs max-h-48 object-contain rounded-md my-2" />;
     }
 
+    // Handle links
     if (isLink && typeof value === 'string' && value) {
       return <a href={value} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline truncate block max-w-full">{value}</a>;
     }
 
+    // Handle dates
     if (value instanceof Date || (typeof value === 'string' && !isNaN(Date.parse(value)))) {
-      
       const date = new Date(value);
       return date.toLocaleString('en-US', {
         year: 'numeric',
@@ -132,30 +238,6 @@ const DetailItem = React.memo<DetailItemProps>(({
         second: '2-digit',
         hour12: false
       });
-    }
-
-    if (isList && Array.isArray(value)) {
-      return (
-        <ul className="list-disc pl-5 space-y-1">
-          {value.map((item, index) => {
-            const itemValue = item && typeof item === 'object' && 'Title' in item 
-              ? (item as { Title: string }).Title 
-              : String(item);
-              
-            return (
-              <li key={index} className={isLink ? 'text-blue-600 hover:underline' : ''}>
-                {isLink ? (
-                  <a href={itemValue} target="_blank" rel="noopener noreferrer">
-                    {itemValue}
-                  </a>
-                ) : (
-                  itemValue
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      );
     }
 
     if (typeof value === 'object' && value !== null) {
