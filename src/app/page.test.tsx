@@ -1,4 +1,6 @@
+/// <reference types="vitest/globals" />
 import { render, screen, waitFor } from '@testing-library/react';
+import type { JSX } from 'react';
 // Remove direct import of Page component here
 // import Page from './page';
 import * as NocoDB from '@/lib/nocodb';
@@ -43,9 +45,9 @@ const mockVideosData: Video[] = [
     Description: 'Desc 1',
     ImportanceRating: 5,
     PersonalComment: 'Comment 1',
-    CreatedAt: new Date().toISOString(),
-    UpdatedAt: new Date().toISOString(),
-    PublishedAt: new Date().toISOString(),
+    CreatedAt: new Date(),
+    UpdatedAt: new Date(),
+    PublishedAt: new Date(),
     Tags: [{ name: 'Tag1' }, { name: 'Tag2' }],
     Categories: [{ name: 'Cat1' }],
     FullTranscript: 'Full transcript for video 1...',
@@ -66,9 +68,9 @@ const mockVideosData: Video[] = [
     Description: 'Desc 2',
     ImportanceRating: 4,
     PersonalComment: 'Comment 2',
-    CreatedAt: new Date().toISOString(),
-    UpdatedAt: new Date().toISOString(),
-    PublishedAt: new Date().toISOString(),
+    CreatedAt: new Date(),
+    UpdatedAt: new Date(),
+    PublishedAt: new Date(),
     Tags: [{ name: 'Tag3' }],
     Categories: [{ name: 'Cat2' }],
     FullTranscript: 'Full transcript for video 2...',
@@ -84,16 +86,25 @@ const mockVideosData: Video[] = [
     Description: 'Desc 3',
     ImportanceRating: 3,
     PersonalComment: 'Comment 3',
-    CreatedAt: new Date().toISOString(),
-    UpdatedAt: new Date().toISOString(),
-    PublishedAt: new Date().toISOString(),
+    CreatedAt: new Date(),
+    UpdatedAt: new Date(),
+    PublishedAt: new Date(),
     Tags: [], Categories: [],
     FullTranscript: null, ActionableAdvice: null, NarrativeFlow: null, TLDR: null, MainSummary: null, Transcript: null, Prompt: null, Persons: null, Companies: null, InvestableAssets: null, Indicators: null, Trends: null, Hashtags: null, Institutions: null, KeyExamples: null, MemorableTakeaways: null, VideoGenre: null, Sentiment: null, PrimarySources: null, MainTopic: null, DetailedNarrativeFlow: null, KeyNumbersData: null, MemorableQuotes: null, "Book-/Media-Recommandations": null, Speaker: null, "$Ticker": null, "Events/Fairs": null, URLs: null, SentimentReason: null, TechnicalTerms: null, DOIs: null, nc___: null, __nc_evolve_to_text__: null, "Created By": null, "Updated By": null,
   },
 ];
 
+interface HomePageProps {
+  searchParams: Promise<{
+    sort?: string;
+    [key: string]: string | string[] | undefined;
+  }>;
+}
+
+type HomePageComponentType = (props: HomePageProps) => Promise<JSX.Element>;
+
 describe('Page (Video List)', () => {
-  let Page: any;
+  let Page: HomePageComponentType;
 
   beforeEach(async () => {
     mockedFetchAllVideos.mockReset();
@@ -150,7 +161,7 @@ describe('Page (Video List)', () => {
         Title: 'Video Title 4',
       },
     ];
-    mockedFetchAllVideos.mockResolvedValue(videosWithMissingChannel as Video[]);
+    mockedFetchAllVideos.mockResolvedValue(videosWithMissingChannel as unknown as Video[]);
     const PageComponent = await Page({ searchParams: { sort: undefined } });
     render(PageComponent);
     await waitFor(() => {
@@ -168,7 +179,7 @@ describe('Page (Video List)', () => {
         ThumbHigh: null,
       },
     ];
-    mockedFetchAllVideos.mockResolvedValue(videoWithNoThumb as Video[]);
+    mockedFetchAllVideos.mockResolvedValue(videoWithNoThumb as unknown as Video[]);
     const PageComponent = await Page({ searchParams: { sort: undefined } });
     render(PageComponent);
     await waitFor(() => {

@@ -1,11 +1,10 @@
 import { fetchAllVideos, type VideoListItem, videoListItemSchema } from "@/lib/nocodb";
-import Image from 'next/image';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Terminal } from 'lucide-react';
 import { SortDropdown } from '@/components/sort-dropdown';
 import { VideoCard } from '@/components/video-card';
 
-export default async function HomePage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ sort?: string; [key: string]: any }> }) {
+export default async function HomePage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ sort?: string; [key: string]: string | string[] | undefined }> }) {
   let videos: VideoListItem[] = [];
   let error: string | null = null;
 
@@ -21,9 +20,9 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
     });
     videos = fetchedVideosData;
     // pageInfo could be used here if pagination controls were added to the main page
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Failed to fetch videos:', e);
-    error = e.message || 'An unknown error occurred while fetching videos.';
+    error = e instanceof Error ? e.message : 'An unknown error occurred while fetching videos.';
   }
 
   if (error) {

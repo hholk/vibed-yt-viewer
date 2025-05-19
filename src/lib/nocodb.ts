@@ -61,7 +61,7 @@ const linkedRecordItemSchema = z.object({
 export const videoSchema = z.object({
   Id: z.number().int(),
   VideoID: z.string(),
-  URL: z.string().url(),
+  URL: z.string().url().optional().nullable(),
   ThumbHigh: z.preprocess(
     (val) => {
       // Check if val is an array, has at least one element, that element is an object, and has a string 'url' property

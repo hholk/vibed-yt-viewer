@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useCallback, useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ChevronDown, ChevronRight, ChevronLeft, Save, Edit, X, AlertCircle } from 'lucide-react';
+import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Video, VideoListItem } from '@/lib/nocodb';
 import { updateVideo } from '@/lib/nocodb';
@@ -12,18 +12,22 @@ import { StarRating } from '@/components/StarRating';
 // Re-export the types for convenience
 export type { Video, VideoListItem } from '@/lib/nocodb';
 
+// Create a type-safe wrapper for ReactMarkdown
 type SafeReactMarkdownProps = {
   children: string;
 };
-
-// Create a type-safe wrapper for ReactMarkdown
 const SafeReactMarkdown = ({ children }: SafeReactMarkdownProps) => {
   return <ReactMarkdown>{children}</ReactMarkdown>;
 };
 
+// Define a general type for field values
+type FieldValue = string | number | boolean | Date | string[] | Record<string, unknown> | Record<string, unknown>[] | null | undefined;
+
 interface VideoDetailPageContentProps {
   video: Video;
-  allVideos: VideoListItem[];
+  allVideos: VideoListItem[]; // Kept for potential future use or other functionalities
+  previousVideo?: { Id: string; Title: string | null } | null;
+  nextVideo?: { Id: string; Title: string | null } | null;
 }
 
 // Helper to format field names (e.g., DetailedNarrativeFlow -> Detailed Narrative Flow)
@@ -48,62 +52,35 @@ const MARKDOWN_FIELDS = [
   'Description',
 ];
 
-/**
- * Checks if a field should be rendered as markdown.
- * @param label The field label (case-insensitive, spaces/underscores ignored)
- */
-function isMarkdownField(label: string): boolean {
-  const normalized = label.replace(/[^a-zA-Z]/g, '').toLowerCase();
-  return MARKDOWN_FIELDS.some(f => f.replace(/[^a-zA-Z]/g, '').toLowerCase() === normalized);
-}
-
 // Component to render a single collapsible detail item
 interface DetailItemProps {
   label: string;
-  value: unknown;
-  className?: string;
+  value: FieldValue;
   isLink?: boolean;
   isImage?: boolean;
   isList?: boolean;
-  isDate?: boolean;
-  isTags?: boolean;
-  isRating?: boolean;
-  isDescription?: boolean;
-  isTranscript?: boolean;
-  isCollapsible?: boolean;
+  isMarkdown?: boolean;
   isInitiallyCollapsed?: boolean;
-  onValueChange?: (value: string) => void;
-  isEditable?: boolean;
-  isSaving?: boolean;
-  error?: string | null;
-  children?: React.ReactNode;
 }
 
 const DetailItem = React.memo<DetailItemProps>(({ 
   label, 
   value, 
-  className, 
   isLink = false, 
-  isImage = false,
-  isList = false,
-  isDate = false,
-  isTags = false,
-  isRating = false,
-  isDescription = false,
-  isTranscript = false,
-  isCollapsible = false,
-  isInitiallyCollapsed = false,
-  onValueChange,
-  isEditable = false,
-  isSaving = false,
-  error = null,
-  children,
+  isImage = false, 
+  isList = false, 
+  isMarkdown = false, // This prop will now be used directly
+  isInitiallyCollapsed
 }) => {
   // Get the collapsed state from localStorage if it exists
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return isInitiallyCollapsed;
+    if (typeof window === 'undefined') return isInitiallyCollapsed ?? true; // SSR fallback
+    // Prioritize isInitiallyCollapsed if provided
+    if (isInitiallyCollapsed !== undefined) {
+      return isInitiallyCollapsed;
+    }
     const savedState = localStorage.getItem(`collapsed_${label}`);
-    return savedState ? JSON.parse(savedState) : isInitiallyCollapsed;
+    return savedState ? JSON.parse(savedState) : true; // Default to true (collapsed) if nothing else specifies
   });
 
   // Save collapsed state to localStorage when it changes
@@ -117,6 +94,7 @@ const DetailItem = React.memo<DetailItemProps>(({
     e.preventDefault();
     setIsCollapsed(prev => !prev);
   }, []);
+
   const isEmpty = value === null || value === undefined || 
                 (Array.isArray(value) && value.length === 0) || 
                 (typeof value === 'string' && value.trim() === '');
@@ -126,26 +104,12 @@ const DetailItem = React.memo<DetailItemProps>(({
       return <span className="text-sm text-neutral-500 italic">N/A</span>;
     }
     
-    if (isMarkdownField(label) && typeof value === 'string') {
+    if (isMarkdown && typeof value === 'string') { // Use the isMarkdown prop directly
       return (
         <div className="prose prose-invert prose-neutral prose-sm max-w-none markdown-box">
-          <ReactMarkdown
-            components={{
-              blockquote({ node: _, ...props }) {
-                return <blockquote className="border-l-4 border-neutral-600 pl-4 italic text-neutral-300 my-2" {...props} />;
-              },
-              code({ node: _, className, children, ...props }) {
-                const isInline = !(className && className.includes('language-'));
-                return isInline ? (
-                  <code className="bg-neutral-800 px-1 rounded text-pink-400" {...props}>{children}</code>
-                ) : (
-                  <pre {...(props as React.HTMLAttributes<HTMLPreElement>)}><code className="bg-neutral-900 p-2 rounded-md overflow-x-auto text-xs">{children}</code></pre>
-                );
-              },
-            }}
-          >
+          <SafeReactMarkdown>
             {value}
-          </ReactMarkdown>
+          </SafeReactMarkdown>
         </div>
       );
     }
@@ -176,13 +140,13 @@ const DetailItem = React.memo<DetailItemProps>(({
     if (isList && Array.isArray(value)) {
       return (
         <ul className="list-disc pl-5 space-y-1">
-          {value.map((item, idx) => {
+          {value.map((item, index) => {
             const itemValue = item && typeof item === 'object' && 'Title' in item 
               ? (item as { Title: string }).Title 
               : String(item);
               
             return (
-              <li key={idx} className={isLink ? 'text-blue-600 hover:underline' : ''}>
+              <li key={index} className={isLink ? 'text-blue-600 hover:underline' : ''}>
                 {isLink ? (
                   <a href={itemValue} target="_blank" rel="noopener noreferrer">
                     {itemValue}
@@ -276,237 +240,202 @@ const DetailItem = React.memo<DetailItemProps>(({
   );
 });
 
-// Define constant arrays outside the component to prevent recreation on each render
-const ARRAY_FIELDS = [
-  'Indicators', 'Trends', 'InvestableAssets', 'Institutions',
-  'EventsFairs', 'DOIs', 'Hashtags', 'PrimarySources',
-  'TechnicalTerms', 'Speakers', 'KeyExamples', 'MemorableQuotes',
-  'MemorableTakeaways', 'BookMediaRecommendations', 'RelatedURLs',
-  'Persons', 'Companies'
-];
+DetailItem.displayName = 'DetailItem';
 
-export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageContentProps) => {
+// Define constant arrays outside the component to prevent recreation on each render
+// const ARRAY_FIELDS = [
+//   'Indicators', 'Trends', 'InvestableAssets', 'Institutions', 'EventsFairs', 
+//   'DOIs', 'Hashtags', 'PrimarySources', 'AuthorsCreators', 'TagsCategories', 
+//   'TargetDemographics', 'KeyPeople', 'CompaniesMentioned', 'ReferencedPapersBooks',
+//   'ToolsSoftwareMentioned', 'FurtherReadingWatchLater' 
+//   // Add any other known array fields from your schema
+// ];
+// const BOOLEAN_FIELDS = [
+//   'IsPublic', 'IsNew', 'HasCaptions', 'IsShort', 'IsSyndicated', 'RequiresSubscription',
+//   'LoginRequired', 'PaymentRequired'
+//   // Add any other known boolean fields
+// ];
+// const NUMERIC_FIELDS = [
+//   'Views', 'Likes', 'Dislikes', 'CommentCount', 'DurationSec', 
+//   'PracticalityRating', 'NoveltyRating', 'TechnicalDepthRating', 'ImpactRating', 'EngagementRating',
+//   'ComplexityRating', 'OverallRating'
+//   // Add any other known numeric fields, ensure ImportanceRating is here if used as numeric
+// ];
+
+export function VideoDetailPageContent({
+  video,
+  // allVideos, // Kept for potential future use or other functionalities
+  previousVideo,
+  nextVideo,
+}: VideoDetailPageContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const currentSort = searchParams.get('sort') || '-CreatedAt';
-  
+  const [currentVideo, setCurrentVideo] = useState<Video>(video);
   const [isEditingComment, setIsEditingComment] = useState(false);
   const [personalComment, setPersonalComment] = useState(video.PersonalComment || '');
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // General saving state
   const [saveError, setSaveError] = useState<string | null>(null);
+  
+  // Specific state for ImportanceRating to handle its star display and updates
+  const [activeImportanceRating, setActiveImportanceRating] = useState<number | null>(video.ImportanceRating || null);
+  
+  // States for inline editing of various fields
+  // const [editStates, setEditStates] = useState<Record<string, boolean>>({});
+  // const [tempEditValues, setTempEditValues] = useState<Record<string, FieldValue>>({});
+  // const [showAllFields, setShowAllFields] = useState(false);
 
-  // Update local state when video prop changes
+
   useEffect(() => {
+    setCurrentVideo(video);
     setPersonalComment(video.PersonalComment || '');
     setIsEditingComment(false);
-  }, [video.Id]);
+    setSaveError(null);
+    setActiveImportanceRating(video.ImportanceRating || null);
+    // Reset inline editing states when video changes
+    // setEditStates({});
+    // setTempEditValues({});
+  }, [video]);
+
+  // Client-side pre-fetching for next/previous videos
+  useEffect(() => {
+    const currentQuery = searchParams.toString();
+    const queryString = currentQuery ? `?${currentQuery}` : '';
+
+    if (previousVideo?.Id) {
+      router.prefetch(`/video/${previousVideo.Id}${queryString}`);
+    }
+    if (nextVideo?.Id) {
+      router.prefetch(`/video/${nextVideo.Id}${queryString}`);
+    }
+  }, [previousVideo, nextVideo, router, searchParams]);
+
+  const navigateToVideo = useCallback((direction: 'prev' | 'next') => {
+    const currentQuery = searchParams.toString();
+    const queryString = currentQuery ? `?${currentQuery}` : '';
+
+    let targetVideoId: string | undefined;
+    if (direction === 'prev' && previousVideo?.Id) {
+      targetVideoId = previousVideo.Id;
+    } else if (direction === 'next' && nextVideo?.Id) {
+      targetVideoId = nextVideo.Id;
+    }
+
+    if (targetVideoId) {
+      router.push(`/video/${targetVideoId}${queryString}`);
+    }
+  }, [previousVideo, nextVideo, router, searchParams]);
 
   const handleSaveComment = async () => {
-    if (isSaving) return;
-    
+    if (!currentVideo?.Id) return;
     setIsSaving(true);
     setSaveError(null);
-    
     try {
-      await updateVideo(video.Id, { PersonalComment: personalComment });
-      // Update the local video object to reflect the change
-      video.PersonalComment = personalComment;
+      const updatedFields = { PersonalComment: personalComment };
+      await updateVideo(currentVideo.Id, updatedFields);
+      setCurrentVideo(prev => ({ ...prev!, ...updatedFields }));
       setIsEditingComment(false);
-      
-      // Show a temporary success message
-      const successMsg = setTimeout(() => {
-        setSaveError(null);
-      }, 3000);
-      
-      return () => clearTimeout(successMsg);
     } catch (error) {
       console.error('Failed to save comment:', error);
-      setSaveError(error instanceof Error ? error.message : 'Failed to save comment');
+      setSaveError(error instanceof Error ? error.message : 'An unknown error occurred.');
     } finally {
       setIsSaving(false);
     }
   };
   
-  const handleCancelEdit = () => {
-    // Reset to the original comment and exit edit mode
-    setPersonalComment(video.PersonalComment || '');
-    setSaveError(null);
-    setIsEditingComment(false);
-  };
+  // Generic handler for saving star ratings
+  const handleRatingChange = async (newRating: number | null, field: keyof Video) => {
+    if (!currentVideo?.Id) return;
 
-  const handleStarRatingChange = async (rating: number) => {
-    if (isSaving) return;
-    
-    setIsSaving(true);
+    // Update the specific rating state if one exists (e.g. for ImportanceRating)
+    if (field === 'ImportanceRating') {
+      setActiveImportanceRating(newRating);
+    }
+    // Add similar blocks for other specific rating fields if needed
+
+    setIsSaving(true); 
     setSaveError(null);
-    
     try {
-      await updateVideo(video.Id, { ImportanceRating: rating });
+      const updatedFields = { [field]: newRating };
+      await updateVideo(currentVideo.Id, updatedFields);
+      setCurrentVideo(prev => ({ ...prev!, ...updatedFields as Partial<Video> }));
     } catch (error) {
-      console.error('Failed to update rating:', error);
-      setSaveError(error instanceof Error ? error.message : 'Failed to update rating');
+      console.error(`Failed to save ${field}:`, error);
+      setSaveError(error instanceof Error ? error.message : `Failed to save ${String(field)}.`);
+      // Revert optimistic update if save fails
+      if (field === 'ImportanceRating') {
+        setActiveImportanceRating(currentVideo.ImportanceRating || null);
+      }
+      // Add similar reversions for other specific rating fields
+    } finally {
       setIsSaving(false);
     }
-  }; 
-
-  // Debug: Log video data to console
-  useEffect(() => {
-    console.log('Video data:', video);
-    console.log('Transcript fields:', {
-      FullTranscript: video.FullTranscript,
-      Transcript: video.Transcript,
-      hasFullTranscript: 'FullTranscript' in video,
-      hasTranscript: 'Transcript' in video
-    });
-  }, [video]);
-  
-  // Find current video index in the sorted list
-  const currentIndex = allVideos.findIndex(v => v.VideoID === video.VideoID);
-  const hasPrevious = currentIndex > 0;
-  const hasNext = currentIndex < allVideos.length - 1;
-
-  // Get previous and next videos for navigation
-  const prevVideo = hasPrevious ? allVideos[currentIndex - 1] : undefined;
-  const nextVideo = hasNext ? allVideos[currentIndex + 1] : undefined;
-
-  // Prefetch next and previous video pages
-  useEffect(() => {
-    console.log('[VideoDetail] Prefetch useEffect. prevVideo:', prevVideo, 'nextVideo:', nextVideo, 'currentSort:', currentSort);
-    if (prevVideo?.VideoID) {
-      const prevUrl = `/video/${prevVideo.VideoID}?sort=${currentSort}`;
-      console.log('[VideoDetail] Attempting to prefetch PREVIOUS video:', prevUrl);
-      router.prefetch(prevUrl);
-    } else {
-      console.log('[VideoDetail] No prevVideo to prefetch or prevVideo.VideoID is missing.');
-    }
-    if (nextVideo?.VideoID) {
-      const nextUrl = `/video/${nextVideo.VideoID}?sort=${currentSort}`;
-      console.log('[VideoDetail] Attempting to prefetch NEXT video:', nextUrl);
-      router.prefetch(nextUrl);
-    } else {
-      console.log('[VideoDetail] No nextVideo to prefetch or nextVideo.VideoID is missing.');
-    }
-  }, [prevVideo, nextVideo, router, currentSort]);
-
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'ArrowLeft' && prevVideo?.VideoID) {
-      console.log('[VideoDetail] Navigating left to:', prevVideo.VideoID);
-
-      router.push(`/video/${prevVideo.VideoID}?sort=${currentSort}`);
-    } else if (e.key === 'ArrowRight' && nextVideo?.VideoID) {
-      console.log('[VideoDetail] Navigating right to:', nextVideo.VideoID);
-
-      router.push(`/video/${nextVideo.VideoID}?sort=${currentSort}`);
-    }
-  }, [prevVideo, nextVideo, router, currentSort]);
-
-  // Optimize the event listener effect
-  useEffect(() => {
-    console.log('[VideoDetail] Keydown useEffect (attaching listener). prevVideo:', prevVideo, 'nextVideo:', nextVideo, 'currentSort:', currentSort, 'handleKeyDown instance changed:', handleKeyDown.toString().substring(0,100));
-    const handler = (e: KeyboardEvent) => {
-      const activeElement = document.activeElement as HTMLElement;
-      if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.closest('button'))) {
-        console.log('[VideoDetail] Keydown event on input/textarea/button, skipping navigation. Target:', activeElement);
-        return; // Don't navigate if focus is on an input, textarea, or button
-      }
-
-      console.log('[VideoDetail] Keydown event:', e.key, 'Prev available:', !!(prevVideo?.VideoID), 'Next available:', !!(nextVideo?.VideoID));
-      handleKeyDown(e);
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [handleKeyDown]);
-
-  const navigateToVideo = (direction: 'prev' | 'next') => {
-    if (direction === 'prev' && prevVideo) {
-      router.push(`/video/${prevVideo.VideoID}?sort=${currentSort}`);
-    } else if (direction === 'next' && nextVideo) {
-      router.push(`/video/${nextVideo.VideoID}?sort=${currentSort}`);
-    }
   };
-  
-  // Navigation buttons component
-  const NavigationButtons = useMemo(() => {
-    return (
-      <div className="fixed top-4 left-0 right-0 z-10 flex items-center justify-between px-4 max-w-[33.6rem] mx-auto w-full">
-        {prevVideo ? (
-          <Link
-            href={`/video/${prevVideo.VideoID}?sort=${currentSort}`}
-            prefetch={true}
-            className="flex items-center px-4 py-2 rounded-md text-sm transition-colors text-blue-400 hover:bg-neutral-700/90 hover:text-blue-300 bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
-            aria-label="Previous video"
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            <span>Previous</span>
-          </Link>
-        ) : (
-          <button
-            disabled
-            className="flex items-center px-4 py-2 rounded-md text-sm text-neutral-600 cursor-not-allowed bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
-            aria-label="No previous video"
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            <span>Previous</span>
-          </button>
-        )}
 
-        <Link 
-          href={`/?sort=${currentSort}`} 
-          className="flex items-center px-4 py-2 text-sm text-blue-400 hover:text-blue-300 bg-neutral-800/80 hover:bg-neutral-700/90 backdrop-blur-sm rounded-md border border-neutral-700 transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Back to List
-        </Link>
+  // Handlers for inline editing (currently commented out to disable functionality)
+  // const handleEditField = (field: string) => {
+  //   setTempEditValues(prev => ({ ...prev, [field]: currentVideo[field as keyof Video] }));
+  //   // setEditStates(prev => ({ ...prev, [field]: true }));
+  // };
 
-        {nextVideo ? (
-          <Link
-            href={`/video/${nextVideo.VideoID}?sort=${currentSort}`}
-            prefetch={true}
-            className="flex items-center px-4 py-2 rounded-md text-sm transition-colors text-blue-400 hover:bg-neutral-700/90 hover:text-blue-300 bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
-            aria-label="Next video"
-          >
-            <span>Next</span>
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Link>
-        ) : (
-          <button
-            disabled
-            className="flex items-center px-4 py-2 rounded-md text-sm text-neutral-600 cursor-not-allowed bg-neutral-800/80 backdrop-blur-sm border border-neutral-700"
-            aria-label="No next video"
-          >
-            <span>Next</span>
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </button>
-        )}
-      </div>
-    );
-  }, [currentSort, nextVideo, prevVideo]);
+  // const handleCancelEdit = (field: string) => {
+  //   // setEditStates(prev => ({ ...prev, [field]: false }));
+  //   setTempEditValues(prev => {
+  //     const { [field]: _, ...rest } = prev;
+  //     return rest;
+  //   });
+  //   setSaveError(null); // Clear general save error when canceling specific field edit
+  // };
 
-  // Memoize the fields to display to prevent recreation on each render
-  const fieldsToDisplayInOrder = useMemo((): (keyof Video)[] => [
-    'ThumbHigh', // Displayed as 'Thumbnail'
-    'URL', // Displayed as 'Video Link'
+  // const handleSaveField = async (field: string) => {
+  //   if (tempEditValues[field] === undefined) return; // Nothing to save or field not in edit mode
+
+  //   setIsSaving(true);
+  //   setSaveError(null);
+  //   try {
+  //     await updateVideo(currentVideo.Id, { [field]: tempEditValues[field] });
+  //     setCurrentVideo(prev => ({ ...prev!, [field]: tempEditValues[field] }));
+  //     // setEditStates(prev => ({ ...prev, [field]: false }));
+  //     setTempEditValues(prev => {
+  //       const { [field]: _, ...rest } = prev;
+  //       return rest;
+  //     });
+  //   } catch (error) {
+  //     console.error(`Error updating ${field}:`, error);
+  //     setSaveError(`Failed to update ${field}.`);
+  //   } finally {
+  //     setIsSaving(false);
+  //   }
+  // };
+
+  // const handleTempEditValueChange = (field: string, newValue: FieldValue) => {
+  //   setTempEditValues(prev => ({ ...prev, [field]: newValue }));
+  // };
+
+  // Define the desired order of fields for the main detail section
+  const detailFieldOrder: (keyof Video)[] = [
+    'ThumbHigh',
+    'URL',
     'ActionableAdvice',
     'TLDR',
     'MainSummary',
-    'KeyNumbersData',
-    'KeyExamples',
+    'Description',
+    'Transcript',
     'DetailedNarrativeFlow',
     'MemorableQuotes',
     'MemorableTakeaways',
-    'ImportanceRating',
-    'PersonalComment',
+    'KeyNumbersData',
+    'KeyExamples',
     'BookMediaRecommendations',
     'RelatedURLs',
     'VideoGenre',
     'Persons',
     'Companies',
-    'Indicators',
-    'Trends',
+    // 'Indicators', // Example of a field that might be an array, handled by isArr directly
+    // 'Trends',
     'InvestableAssets',
-    'TickerSymbol',
-    'Institutions',
-    'EventsFairs',
+    'Ticker',
+    // 'Institutions',
+    // 'EventsFairs',
     'DOIs',
     'Hashtags',
     'MainTopic',
@@ -514,151 +443,198 @@ export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageCont
     'Sentiment',
     'SentimentReason',
     'Channel',
-    'Description',
     'TechnicalTerms',
-    'Speakers',
-    'CreatedAt',
-    'UpdatedAt',
-    'PublishedAt',
-    'Transcript' // Using Transcript field instead of FullTranscript
-  ], []);
+    'Speaker',
+    // Fields like VideoID, CreatedAt, UpdatedAt will be shown in the right column or if explicitly added here
+  ];
 
+  // Loading state check
+  if (!currentVideo) {
+    return (
+      <div className="container mx-auto p-4 min-h-screen flex items-center justify-center">
+        <p className="text-xl text-neutral-400">Loading video details...</p>
+      </div>
+    );
+  }
+
+  // Main component rendering
   return (
-    <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans relative">
-      {NavigationButtons}
-      
-      <div className="max-w-[33.6rem] mx-auto pt-20">
-        <h1 className="font-plex-mono text-3xl md:text-4xl font-bold mb-1 text-neutral-100 break-words">
-          {video.Title}
+    <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
+      <div className="container mx-auto max-w-5xl">
+        {/* Back to List Link & Navigation Buttons */}
+        <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
+          <Link href={`/?sort=${searchParams.get('sort') || '-CreatedAt'}`} className="flex items-center text-blue-400 hover:text-blue-300 transition-colors group">
+            <ArrowLeft size={18} className="mr-2 group-hover:-translate-x-1 transition-transform duration-200" />
+            Back to Video List
+          </Link>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => navigateToVideo('prev' as 'prev' | 'next')}
+              disabled={!previousVideo}
+              className="flex items-center px-4 py-2 bg-brand-secondary hover:bg-brand-secondary/80 text-white font-medium rounded-md shadow-sm transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand-secondary focus:ring-opacity-60"
+              title={previousVideo?.Title || 'No previous video'}
+            >
+              <ChevronLeft size={20} className="mr-1" /> Previous
+            </button>
+            <button
+              onClick={() => navigateToVideo('next' as 'prev' | 'next')}
+              disabled={!nextVideo}
+              className="flex items-center px-4 py-2 bg-brand-secondary hover:bg-brand-secondary/80 text-white font-medium rounded-md shadow-sm transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand-secondary focus:ring-opacity-60"
+              title={nextVideo?.Title || 'No next video'}
+            >
+              Next <ChevronRight size={20} className="ml-1" />
+            </button>
+          </div>
+        </div>
+
+        {/* Video Title - Placed above the two-column grid */}
+        <h1 className="text-3xl font-semibold mb-4 text-neutral-100 break-words hyphens-auto" title={currentVideo.Title || 'Video Title'}>
+          {currentVideo.Title || 'Untitled Video'}
         </h1>
-        {/* Display VideoID under the title, as it's in the collapsed section otherwise */}
-        <p className="text-xs text-neutral-500 mb-6">Video ID: {video.VideoID}</p>
+        
+        {/* Save Error Display */}
+        {saveError && (
+          <div className="mb-4 p-3 bg-red-700/30 border border-red-600 text-red-300 rounded-md flex items-center">
+            <AlertTriangle size={20} className="mr-2" />
+            <span>Error: {saveError}</span>
+          </div>
+        )}
 
-        <div className="space-y-1">
-          {fieldsToDisplayInOrder.map((key) => {
-            const value = video[key as keyof Video];
-            let label = key as string;
-            // Keep FullTranscript as is, we'll handle it specially
-            if (key === 'ThumbHigh') label = 'Thumbnail';
-            if (key === 'URL') label = 'Video Link';
-            if (key === 'TickerSymbol') label = '$Ticker';
-            if (key === 'VideoID') return null; // Already displayed under title
-            if (key === 'Title') return null; // Already displayed as H1
+        {/* Main Content Grid - Two Columns */} 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Left Column: Video Details (Iterating based on detailFieldOrder) */}
+          <div className="md:col-span-2 space-y-4">
+            {detailFieldOrder.map((fieldKey: keyof Video) => {
+              let value = currentVideo[fieldKey]; // Changed to let to allow modification
+              const label = formatFieldName(String(fieldKey));
 
-            // Use the pre-defined ARRAY_FIELDS constant
-            const isArrayField = ARRAY_FIELDS.includes(key as string);
+              // Convert empty object to null to conform to FieldValue type and simplify checks
+              if (typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length === 0) {
+                value = null;
+              }
 
-            if (key === 'ImportanceRating') {
+              if (value === null || value === undefined || 
+                 (typeof value === 'string' && value.trim() === '') ||
+                 (Array.isArray(value) && value.length === 0)
+              ) {
+                return null; // Skip rendering empty or null fields
+              }
+
+              let isInitiallyCollapsed = true;
+              const initiallyExpandedFields = ['ThumbHigh', 'URL', 'ActionableAdvice', 'TLDR', 'MainSummary', 'Description', 'Transcript'];
+              if (initiallyExpandedFields.includes(String(fieldKey))) {
+                isInitiallyCollapsed = false;
+              }
+              
+              const isImg = fieldKey === 'ThumbHigh';
+              const isLnk = fieldKey === 'URL' || (fieldKey === 'RelatedURLs' && Array.isArray(value) && value.every(item => typeof item === 'string' && item.startsWith('http')));
+              const isMd = MARKDOWN_FIELDS.includes(String(fieldKey)) || fieldKey === 'Description' || fieldKey === 'Transcript' || (typeof value === 'string' && String(value).length > 100 && !isLnk && !isImg); // Heuristic for markdown
+              const isArr = Array.isArray(value);
+
               return (
-                <div className="mb-3 last:mb-0 bg-neutral-800/50 p-3 rounded-lg shadow-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-medium text-neutral-400">
-                      {formatFieldName(label)}
-                    </span>
-                    {isSaving && (
-                      <span className="text-xs text-yellow-400">Saving...</span>
-                    )}
-                  </div>
-                  <div className="mt-2 pl-1">
-                    <StarRating 
-                      value={video.ImportanceRating} 
-                      onChange={handleStarRatingChange}
-                    />
-                  </div>
-                </div>
+                <DetailItem
+                  key={String(fieldKey)}
+                  label={label}
+                  value={value}
+                  isInitiallyCollapsed={isInitiallyCollapsed}
+                  isMarkdown={isMd}
+                  isImage={isImg}
+                  isLink={isLnk}
+                  isList={isArr && !isLnk && !isImg && !isMd} // Don't render markdown as list by default
+                />
               );
-            }
-            
-            if (key === 'PersonalComment') {
-              return (
-                <div key="personal-comment" className="mb-3 last:mb-0 bg-neutral-800/50 p-3 rounded-lg shadow-sm transition-colors hover:bg-neutral-800/70">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-medium text-neutral-300">
-                      {formatFieldName(key)}
-                    </span>
-                    {isEditingComment ? (
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={handleSaveComment}
-                          disabled={isSaving}
-                          className="text-xs flex items-center px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <Save className="h-3 w-3 mr-1" />
-                          {isSaving ? 'Saving...' : 'Save'}
-                        </button>
-                        <button
-                          onClick={handleCancelEdit}
-                          disabled={isSaving}
-                          className="text-xs flex items-center px-2 py-1 rounded bg-neutral-600 hover:bg-neutral-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <X className="h-3 w-3 mr-1" />
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setSaveError(null);
-                          setIsEditingComment(true);
-                        }}
-                        className="text-xs flex items-center px-2 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-white transition-colors"
-                      >
-                        <Edit className="h-3 w-3 mr-1" />
-                        {video.PersonalComment ? 'Edit Note' : 'Add Note'}
-                      </button>
-                    )}
-                  </div>
-                  <div className="pl-1">
-                    {isEditingComment ? (
-                      <div className="space-y-2">
-                        <textarea
-                          value={personalComment}
-                          onChange={(e) => setPersonalComment(e.target.value)}
-                          className="w-full p-3 bg-neutral-700 text-white rounded border border-neutral-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                          rows={5}
-                          disabled={isSaving}
-                          placeholder="Add your personal notes about this video..."
-                          autoFocus
-                        />
-                        {saveError ? (
-                          <p className="text-red-400 text-xs flex items-center">
-                            <AlertCircle className="h-4 w-4 mr-1" />
-                            {saveError}
-                          </p>
-                        ) : (
-                          <p className="text-xs text-neutral-400">
-                            Your notes are saved automatically when you click Save.
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <div 
-                        className={`whitespace-pre-wrap text-sm break-words p-2 rounded ${
-                          !video.PersonalComment ? 'text-neutral-400 bg-neutral-800/30 p-4 text-center' : ''
-                        }`}
-                      >
-                        {video.PersonalComment || 'Click "Add Note" to add your personal thoughts about this video.'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            }
-            
-            return (
-              <DetailItem 
-                key={key as string} 
-                label={label as string} 
-                value={value} 
-                isInitiallyCollapsed={false}
-                isLink={key === 'URL' || key === 'RelatedURLs'}
-                isImage={key === 'ThumbHigh'}
-                isList={ARRAY_FIELDS.includes(key as string) && Array.isArray(value)}
+            })}
+            {/* Optional: Button to show/hide more fields if detailFieldOrder gets too long */}
+            {/* <button 
+              onClick={() => setShowAllFields(!showAllFields)}
+              className="w-full mt-4 px-4 py-2 bg-neutral-700 hover:bg-neutral-600 text-neutral-200 rounded-md transition-colors"
+            >
+              {showAllFields ? 'Show Fewer Details' : 'Show More Details'}
+            </button> */}
+          </div>
+
+          {/* Right Column: Metadata, Comments, Ratings (Preserving existing structure) */}
+          <div className="md:col-span-1 space-y-6">
+            {/* Importance Rating Section */}
+            <div className="p-4 bg-neutral-800 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-2 text-neutral-300">Importance Rating</h3>
+              <StarRating
+                value={activeImportanceRating ?? 0}
+                onChange={(newRating: number) => handleRatingChange(newRating, 'ImportanceRating')}
+                size={28}
+                readOnly={isSaving}
               />
-            );
-          })}
+            </div>
+
+            {/* Personal Comment Section */}
+            <div className="p-4 bg-neutral-800 rounded-lg shadow">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-lg font-semibold text-neutral-300">Personal Note</h3>
+                {!isEditingComment && (
+                  <button
+                    onClick={() => setIsEditingComment(true)}
+                    className="text-sm flex items-center px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                  >
+                    <Edit3 size={18} className="mr-1.5" />
+                    {currentVideo.PersonalComment ? 'Edit' : 'Add Note'}
+                  </button>
+                )}
+              </div>
+              {isEditingComment ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={personalComment}
+                    onChange={(e) => setPersonalComment(e.target.value)}
+                    className="w-full p-2.5 bg-neutral-700 text-neutral-50 rounded-md border border-neutral-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    rows={6}
+                    disabled={isSaving}
+                    placeholder="Your private notes about this video..."
+                  />
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      onClick={() => {
+                        setIsEditingComment(false);
+                        setPersonalComment(currentVideo.PersonalComment || '');
+                      }}
+                      className="px-4 py-2 text-sm rounded-md bg-neutral-600 hover:bg-neutral-500 text-neutral-200 transition-colors"
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveComment}
+                      className="px-4 py-2 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors"
+                      disabled={isSaving}
+                    >
+                      {isSaving ? 'Saving...' : 'Save Note'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                currentVideo.PersonalComment ? (
+                  <div className="prose prose-sm prose-invert max-w-none text-neutral-300 overflow-hidden">
+                    <SafeReactMarkdown>
+                      {currentVideo.PersonalComment}
+                    </SafeReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-400 italic">No personal note added yet.</p>
+                )
+              )}
+            </div>
+            
+            {/* Other metadata fields */}
+            <div className="p-4 bg-neutral-800 rounded-lg shadow text-xs text-neutral-400 space-y-1">
+                {currentVideo.VideoID && <p>Video ID: <span className="font-mono">{currentVideo.VideoID}</span></p>}
+                {currentVideo.CreatedAt && <p>Created: {new Date(currentVideo.CreatedAt).toLocaleString()}</p>}
+                {currentVideo.UpdatedAt && <p>Last Updated: {new Date(currentVideo.UpdatedAt).toLocaleString()}</p>}
+                {currentVideo.PublishedAt && <p>Published: {new Date(currentVideo.PublishedAt).toLocaleString()}</p>}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default VideoDetailPageContent;
