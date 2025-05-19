@@ -371,25 +371,48 @@ export const VideoDetailPageContent = ({ video, allVideos }: VideoDetailPageCont
 
   // Prefetch next and previous video pages
   useEffect(() => {
-    if (prevVideo) {
-      router.prefetch(`/video/${prevVideo.VideoID}?sort=${currentSort}`);
+    console.log('[VideoDetail] Prefetch useEffect. prevVideo:', prevVideo, 'nextVideo:', nextVideo, 'currentSort:', currentSort);
+    if (prevVideo?.VideoID) {
+      const prevUrl = `/video/${prevVideo.VideoID}?sort=${currentSort}`;
+      console.log('[VideoDetail] Attempting to prefetch PREVIOUS video:', prevUrl);
+      router.prefetch(prevUrl);
+    } else {
+      console.log('[VideoDetail] No prevVideo to prefetch or prevVideo.VideoID is missing.');
     }
-    if (nextVideo) {
-      router.prefetch(`/video/${nextVideo.VideoID}?sort=${currentSort}`);
+    if (nextVideo?.VideoID) {
+      const nextUrl = `/video/${nextVideo.VideoID}?sort=${currentSort}`;
+      console.log('[VideoDetail] Attempting to prefetch NEXT video:', nextUrl);
+      router.prefetch(nextUrl);
+    } else {
+      console.log('[VideoDetail] No nextVideo to prefetch or nextVideo.VideoID is missing.');
     }
-  }, [prevVideo?.VideoID, nextVideo?.VideoID, currentSort, router]);
+  }, [prevVideo, nextVideo, router, currentSort]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'ArrowLeft' && prevVideo) {
+    if (e.key === 'ArrowLeft' && prevVideo?.VideoID) {
+      console.log('[VideoDetail] Navigating left to:', prevVideo.VideoID);
+
       router.push(`/video/${prevVideo.VideoID}?sort=${currentSort}`);
-    } else if (e.key === 'ArrowRight' && nextVideo) {
+    } else if (e.key === 'ArrowRight' && nextVideo?.VideoID) {
+      console.log('[VideoDetail] Navigating right to:', nextVideo.VideoID);
+
       router.push(`/video/${nextVideo.VideoID}?sort=${currentSort}`);
     }
-  }, [nextVideo?.VideoID, prevVideo?.VideoID, router, currentSort]);
+  }, [prevVideo, nextVideo, router, currentSort]);
 
   // Optimize the event listener effect
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => handleKeyDown(e);
+    console.log('[VideoDetail] Keydown useEffect (attaching listener). prevVideo:', prevVideo, 'nextVideo:', nextVideo, 'currentSort:', currentSort, 'handleKeyDown instance changed:', handleKeyDown.toString().substring(0,100));
+    const handler = (e: KeyboardEvent) => {
+      const activeElement = document.activeElement as HTMLElement;
+      if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.closest('button'))) {
+        console.log('[VideoDetail] Keydown event on input/textarea/button, skipping navigation. Target:', activeElement);
+        return; // Don't navigate if focus is on an input, textarea, or button
+      }
+
+      console.log('[VideoDetail] Keydown event:', e.key, 'Prev available:', !!(prevVideo?.VideoID), 'Next available:', !!(nextVideo?.VideoID));
+      handleKeyDown(e);
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [handleKeyDown]);

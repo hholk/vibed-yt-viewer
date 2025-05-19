@@ -59,12 +59,6 @@ export function StarRating({ value, onChange, readOnly = false, size = 24 }: Sta
     }
   };
 
-  // Focus first star when component mounts or when it becomes interactive
-  useEffect(() => {
-    if (!readOnly && !isLoading && starRefs.current[0]) {
-      starRefs.current[0]?.focus();
-    }
-  }, [readOnly, isLoading]);
 
   return (
     <div 
