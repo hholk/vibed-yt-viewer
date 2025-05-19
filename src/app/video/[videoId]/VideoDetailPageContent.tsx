@@ -68,13 +68,16 @@ const DetailItem = React.memo<DetailItemProps>(({
 }) => {
   
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return isInitiallyCollapsed ?? true; 
+    if (typeof window === 'undefined') return true; 
     
-    if (isInitiallyCollapsed !== undefined) {
-      return isInitiallyCollapsed;
-    }
+    // Always check localStorage first for user's last preference
     const savedState = localStorage.getItem(`collapsed_${label}`);
-    return savedState ? JSON.parse(savedState) : true; 
+    if (savedState !== null) {
+      return JSON.parse(savedState);
+    }
+    
+    // Fall back to the initial collapsed state if no saved preference exists
+    return isInitiallyCollapsed ?? true;
   });
 
   
@@ -386,13 +389,12 @@ export function VideoDetailPageContent({
 
   
   const detailFieldOrder: (keyof Video)[] = [
+    'Title',
     'ThumbHigh',
     'URL',
     'ActionableAdvice',
     'TLDR',
     'MainSummary',
-    'Description',
-    'Transcript',
     'DetailedNarrativeFlow',
     'MemorableQuotes',
     'MemorableTakeaways',
@@ -403,12 +405,12 @@ export function VideoDetailPageContent({
     'VideoGenre',
     'Persons',
     'Companies',
-    
-    
+    'Indicators',
+    'Trends',
     'InvestableAssets',
     'Ticker',
-    
-    
+    'Institutions',
+    'EventsFairs',
     'DOIs',
     'Hashtags',
     'MainTopic',
@@ -416,9 +418,10 @@ export function VideoDetailPageContent({
     'Sentiment',
     'SentimentReason',
     'Channel',
+    'Description',
     'TechnicalTerms',
     'Speaker',
-    
+    'Transcript'
   ];
 
   
@@ -494,7 +497,7 @@ export function VideoDetailPageContent({
               }
 
               let isInitiallyCollapsed = true;
-              const initiallyExpandedFields = ['ThumbHigh', 'URL', 'ActionableAdvice', 'TLDR', 'MainSummary', 'Description', 'Transcript'];
+              const initiallyExpandedFields = ['Title', 'ThumbHigh', 'URL', 'ActionableAdvice', 'TLDR', 'MainSummary'];
               if (initiallyExpandedFields.includes(String(fieldKey))) {
                 isInitiallyCollapsed = false;
               }
