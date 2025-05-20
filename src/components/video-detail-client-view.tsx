@@ -35,7 +35,7 @@ const renderBadgeList = (
   if (validItems.length === 0) return null;
 
   return (
-    <div className="mb-4">
+    <div className="mb-2">
       <h3 className="text-md font-semibold text-muted-foreground mb-1.5">{label}</h3>
       <div className="flex flex-wrap gap-1">
         {validItems.map((item, index) => {
@@ -55,8 +55,8 @@ const renderBadgeList = (
 const renderDetailItem = (label: string, value: React.ReactNode | string | number | null | undefined, className?: string) => {
   if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
   return (
-    <div className={`mb-4 ${className}`}>
-      <h3 className="text-md font-semibold text-muted-foreground mb-0.5">{label}</h3>
+    <div className={`mb-0.5 ${className}`}>
+      <h3 className="text-md font-semibold text-muted-foreground mb-0">{label}</h3>
       {typeof value === 'string' || typeof value === 'number' ? <p className="text-base text-foreground whitespace-pre-wrap">{value}</p> : value}
     </div>
   );
@@ -65,8 +65,8 @@ const renderDetailItem = (label: string, value: React.ReactNode | string | numbe
 const renderStarRating = (rating: number | null | undefined) => {
   if (rating === null || rating === undefined) return renderDetailItem("Importance Rating", "Not Rated");
   return (
-    <div className="mb-4">
-      <h3 className="text-md font-semibold text-muted-foreground mb-0.5">Importance Rating</h3>
+    <div className="mb-2">
+      <h3 className="text-md font-semibold text-muted-foreground mb-0">Importance Rating</h3>
       <div className="flex items-center">
         {[...Array(5)].map((_, i) => (
           <Star key={i} className={`h-5 w-5 ${i < rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
@@ -80,8 +80,8 @@ const renderStarRating = (rating: number | null | undefined) => {
 const renderStringList = (items: string[] | null | undefined, label: string) => {
   if (!items || items.length === 0) return null;
   return (
-    <div className="mb-4">
-      <h3 className="text-md font-semibold text-muted-foreground mb-1">{label}</h3>
+    <div className="mb-2">
+      <h3 className="text-md font-semibold text-muted-foreground mb-0.5">{label}</h3>
       <ul className="list-disc list-inside pl-2 space-y-0.5 text-base text-foreground">
         {items.map((item, idx) => <li key={idx}>{item}</li>)}
       </ul>
@@ -92,8 +92,8 @@ const renderStringList = (items: string[] | null | undefined, label: string) => 
 const renderUrlList = (items: string[] | null | undefined, label: string) => {
   if (!items || items.length === 0) return null;
   return (
-    <div className="mb-4">
-      <h3 className="text-md font-semibold text-muted-foreground mb-1">{label}</h3>
+    <div className="mb-1">
+      <h3 className="text-md font-semibold text-muted-foreground mb-0">{label}</h3>
       <ul className="list-disc list-inside pl-2 space-y-0.5 text-base text-foreground">
         {items.map((url, idx) => (
           <li key={idx}>
@@ -243,7 +243,7 @@ export default function VideoDetailClientView({ video, allVideos, currentSort }:
         {renderStringList(video.TechnicalTerms, "Technical Terms")}
         {renderDetailItem("Speaker(s)", video.Speaker || (Array.isArray(video.Speakers) && video.Speakers.map(s => s.Title || s.name).join(', ')) )}
 
-        <div className="mt-8 pt-6 border-t border-border text-xs text-muted-foreground space-y-1">
+        <div className="mt-6 pt-4 border-t border-border text-xs text-muted-foreground space-y-0.5">
             {renderDetailItem("NocoDB VideoID (for query)", video.VideoID, "mb-1")}
             <p>Record Created: {formatDate(video.CreatedAt)}</p>
             <p>Record Last Updated: {formatDate(video.UpdatedAt)}</p>
@@ -251,13 +251,13 @@ export default function VideoDetailClientView({ video, allVideos, currentSort }:
         </div>
 
         {(video.FullTranscript || video.Transcript) && (
-          <div className="mt-8 pt-6 border-t border-border">
+          <div className="mt-6 pt-4 border-t border-border">
             <div className="bg-muted/20 p-6 rounded-lg shadow">
               <h2 className="text-xl font-bold text-foreground mb-4">
                 {video.FullTranscript ? "Full Transcript" : "Transcript"}
               </h2>
               <div className="prose max-w-none text-foreground/90">
-                <div className="space-y-4">
+                <div className="space-y-1">
                   {((video.FullTranscript || video.Transcript) ?? '')
                     .split('\n\n')
                     .filter(Boolean)
