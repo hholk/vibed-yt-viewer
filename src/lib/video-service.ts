@@ -155,17 +155,27 @@ export async function updateVideoDetails(
 
     console.log(`[updateVideoDetails] PATCH successful for VideoID ${videoId}. NocoDB Response:`, response.data);
 
-    recordIdCache.delete(videoId); 
-    // The videoCache in nocodb.ts (used by fetchVideoByVideoId) should also be cleared ideally.
-    // Calling fetchVideoByVideoId will use its cache or fetch fresh if not found/stale.
-
+    // Clear caches
+    recordIdCache.delete(videoId);
+    
+    // Return the directly updated data from the PATCH response if it contains the full record
+    if (response.data && typeof response.data === 'object' && 'Id' in response.data) {
+      console.log(`[updateVideoDetails] Using direct response data for VideoID ${videoId}.`);
+      return response.data as Video;
+    }
+    
+    // Fallback to re-fetching the full record if the PATCH response doesn't contain it
     console.log(`[updateVideoDetails] Re-fetching updated video data for VideoID ${videoId}.`);
-    // fetchVideoByVideoId from nocodb.ts uses NC_TOKEN and its own project ID logic.
     const updatedVideo = await fetchVideoByVideoId(videoId);
 
     if (!updatedVideo) {
-        console.error(`[updateVideoDetails] Failed to re-fetch video data for VideoID ${videoId} after update, or video no longer exists.`);
-        throw new Error(`Failed to re-fetch video data for VideoID ${videoId} after update.`);
+      console.error(`[updateVideoDetails] Failed to re-fetch video data for VideoID ${videoId} after update.`);
+      // Instead of throwing an error, return the best available data
+      if (response.data) {
+        console.log(`[updateVideoDetails] Returning partial update data for VideoID ${videoId}.`);
+        return { ...response.data, VideoID: videoId } as Video;
+      }
+      throw new Error(`Failed to re-fetch video data for VideoID ${videoId} after update.`);
     }
     
     console.log(`[updateVideoDetails] Successfully updated and re-fetched video for VideoID ${videoId}.`);
