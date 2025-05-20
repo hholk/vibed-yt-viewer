@@ -1,22 +1,28 @@
 import { fetchAllVideos, type VideoListItem, videoListItemSchema } from "@/lib/nocodb";
+import { FilterDropdown } from '@/components/filter-dropdown';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Terminal } from 'lucide-react';
 import { SortDropdown } from '@/components/sort-dropdown';
 import { VideoCard } from '@/components/video-card';
 
-export default async function HomePage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ sort?: string; [key: string]: string | string[] | undefined }> }) {
+export default async function HomePage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ sort?: string; filterCategory?: string; filterValues?: string; [key: string]: string | string[] | undefined }> }) {
   let videos: VideoListItem[] = [];
   let error: string | null = null;
 
   try {
     const resolvedSearchParams = await searchParamsPromise;
     const sortParam = resolvedSearchParams.sort;
-    const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt'; 
+    const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt';
+    
+    const filterCategory = resolvedSearchParams.filterCategory;
+    const filterValues = resolvedSearchParams.filterValues?.split(',') || [];
     
     const fetchedVideosData = await fetchAllVideos({
       sort: currentSort,
-      fields: ['Id', 'Title', 'ThumbHigh', 'Channel', 'VideoID'], 
+      fields: ['Id', 'Title', 'ThumbHigh', 'Channel', 'VideoID'],
       schema: videoListItemSchema,
+      filterCategory: filterCategory,
+      filterValues: filterValues.length > 0 ? filterValues : undefined,
     });
     videos = fetchedVideosData;
     
@@ -55,7 +61,10 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-brand font-mono">Video Collection</h1>
-        <SortDropdown />
+        <div className="flex gap-4">
+          <FilterDropdown />
+          <SortDropdown />
+        </div>
       </div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
         {videos.map((video, index) => (

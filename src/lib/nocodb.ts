@@ -303,11 +303,49 @@ const DEFAULT_PAGE_SIZE = 25;
  * Options for fetching videos from NocoDB.
  * @template T - The schema type for video items.
  */
+type FilterOperator = {
+  _eq?: string | number | boolean | null;
+  _neq?: string | number | boolean | null;
+  _like?: string;
+  _nlike?: string;
+  _in?: (string | number)[];
+  _nin?: (string | number)[];
+  _gt?: string | number;
+  _lt?: string | number;
+  _gte?: string | number;
+  _lte?: string | number;
+  _is?: null;
+};
+
+type WhereCondition = {
+  [key: string]: string | number | boolean | null | FilterOperator;
+};
+
+type WhereClause = WhereCondition | {
+  _or?: WhereCondition[];
+  _and?: WhereCondition[];
+};
+
 interface FetchVideosOptions<T extends z.ZodTypeAny> {
-  sort?: string;
-  limit?: number;
+  /**
+   * Page number to fetch (1-based)
+   */
   page?: number;
+  /**
+   * Number of items per page
+   */
+  limit?: number;
+  /**
+   * Sort order (e.g., 'Title', '-CreatedAt')
+   */
+  sort?: string;
+  /**
+   * Fields to include in the response
+   */
   fields?: string[];
+  /**
+   * Custom schema for response validation
+   */
   schema?: T;
   /**
    * Override for NocoDB project ID
@@ -317,6 +355,10 @@ interface FetchVideosOptions<T extends z.ZodTypeAny> {
    * Override for NocoDB table name
    */
   ncTableName?: string;
+  /**
+   * Where clause for filtering
+   */
+  where?: WhereClause;
 }
 
 /**
@@ -381,6 +423,44 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
    */
   if (options?.sort) {
     params.sort = options.sort;
+  }
+
+  // Add where clause to the request parameters if specified
+  if (options?.where) {
+    const convertWhereToString = (clause: WhereClause): string => {
+      // Type guard to ensure clause is an object and has the _or property, and _or is an array
+      if (typeof clause === 'object' && clause !== null && '_or' in clause && Array.isArray(clause._or)) {
+        if (clause._or.length > 0) {
+          return clause._or.map((cond: WhereCondition) => {
+            const field = Object.keys(cond)[0];
+            if (!field) return ''; // Should not happen with well-formed WhereCondition
+            
+            const filterOpObject = cond[field];
+            // Ensure filterOpObject is a valid FilterOperator object
+            if (typeof filterOpObject === 'object' && filterOpObject !== null && !Array.isArray(filterOpObject)) {
+              const operatorKey = Object.keys(filterOpObject)[0] as keyof FilterOperator;
+              if (!operatorKey) return ''; // Should not happen with well-formed FilterOperator
+              
+              const value = (filterOpObject as FilterOperator)[operatorKey];
+              const nocoOperator = operatorKey.startsWith('_') ? operatorKey.substring(1) : operatorKey;
+              
+              // Basic value stringification, might need more robust escaping for complex values
+              const stringValue = (value === null || value === undefined) ? 'null' : String(value);
+              return `(${field},${nocoOperator},${stringValue})`;
+            }
+            return ''; // Condition field is not a FilterOperator object
+          }).filter(Boolean).join('or'); // filter(Boolean) removes empty strings from malformed conditions. Use 'or' as per NocoDB docs.
+        }
+      }
+      // TODO: Handle _and clauses or single WhereConditions if they become necessary
+      return ''; 
+    };
+
+    const whereString = convertWhereToString(options.where);
+    if (whereString) {
+      params.where = whereString;
+      console.log('[fetchVideos] NocoDB where string constructed:', whereString);
+    }
   }
 
   /**
@@ -541,11 +621,6 @@ export async function fetchVideoByVideoId(videoId: string, options?: FetchVideoB
   return fetchPromise;
 }
 
-/**
- * Options for fetching all videos from NocoDB
- * 
- * @template T - The schema type for video items (defaults to videoSchema)
- */
 interface FetchAllVideosOptions<T extends z.ZodTypeAny> {
   /**
    * Sort order (e.g., 'Title', '-CreatedAt')
@@ -568,6 +643,16 @@ interface FetchAllVideosOptions<T extends z.ZodTypeAny> {
    * Override for NocoDB table name
    */
   ncTableName?: string;
+
+  /**
+   * Filter category (e.g., 'ImportanceRating', 'Channel')
+   */
+  filterCategory?: string;
+
+  /**
+   * Filter values for the selected category
+   */
+  filterValues?: string[];
 }
 
 /**
@@ -578,6 +663,24 @@ interface FetchAllVideosOptions<T extends z.ZodTypeAny> {
  * @returns Array of all video records
  * @throws Error if any request fails or response validation fails
  */
+export async function fetchDistinctValues(field: string): Promise<string[]> {
+  console.log(`[fetchDistinctValues] Called for field: ${field}`);
+  
+  try {
+    const response = await fetch(`/api/distinct-values?field=${encodeURIComponent(field)}`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(`Failed to fetch distinct values: ${error.error || response.statusText}`);
+    }
+    const values = await response.json();
+    console.log(`[fetchDistinctValues] Received values for ${field}:`, values);
+    return values;
+  } catch (error: any) {
+    console.error(`[fetchDistinctValues] Error fetching distinct values for field ${field}:`, error.message);
+    throw error;
+  }
+}
+
 export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
   options?: FetchAllVideosOptions<T>
 ): Promise<z.infer<T>[]> {
@@ -607,7 +710,18 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
     fields: options?.fields,
     ncProjectId: options?.ncProjectId,
     ncTableName: options?.ncTableName,
+    where: options?.filterCategory && options?.filterValues && options.filterValues.length > 0
+      ? {
+          _or: options.filterValues.map((value: string) => ({
+            [options.filterCategory as string]: {
+              _eq: value
+            }
+          }))
+        }
+      : undefined
   };
+
+  console.log('[fetchAllVideos] Fetch options:', JSON.stringify(fetchOptions, null, 2));
 
   while (hasMorePages) {
     try {
