@@ -1,17 +1,29 @@
-
-import { fetchVideos } from '@/lib/nocodb'; 
+import { fetchVideos, type VideoListItem } from '@/lib/nocodb';
 import Link from 'next/link';
 
-async function getData() {
+// Define the expected structure of the result from getData
+interface GetDataResult {
+  data?: VideoListItem[];
+  message?: string;
+  error?: string;
+  stack?: string;
+}
+
+async function getData(): Promise<GetDataResult> {
   console.log("Attempting to fetch videos for test page...");
   try {
-    const videos = await fetchVideos();
-    console.log("Successfully fetched videos:", videos);
-    if (videos.length === 0) {
-      console.log("fetchVideos returned an empty array. This might be expected if your table is empty, or it could indicate an issue if you expect data.");
-      return { data: videos, message: "Fetched successfully, but no videos found in the table." };
+    // fetchVideos returns an object like { list: VideoListItem[], pageInfo: ... }
+    const response = await fetchVideos(); 
+    console.log("Successfully fetched videos:", response);
+    if (!response || !response.videos) {
+        console.warn("fetchVideos response or response.videos is undefined.");
+        return { error: "Failed to fetch videos: Invalid response structure."};
     }
-    return { data: videos };
+    if (response.videos.length === 0) {
+      console.log("fetchVideos returned an empty array. This might be expected if your table is empty, or it could indicate an issue if you expect data.");
+      return { data: response.videos, message: "Fetched successfully, but no videos found in the table." };
+    }
+    return { data: response.videos };
   } catch (error) {
     console.error("Error fetching videos for test page:", error);
     if (error instanceof Error) {
@@ -38,11 +50,11 @@ export default async function TestNocoDBPage() {
           <p>
             <strong>Troubleshooting Tips:</strong>
             <ul>
-              <li>Ensure your NocoDB instance is running at the URL specified in <code>NEXT_PUBLIC_NC_URL</code> (e.g., <code>http:
-              <li>Verify the <code>NEXT_PUBLIC_NC_TOKEN</code> in your <code>.env.local</code> file is correct and has read permissions for the table.</li>
-              <li>Check that the table name (<code>NEXT_PUBLIC_NOCODB_TABLE_NAME</code> in <code>.env.local</code>, or default <code>youtubeTranscripts</code>) exists in your NocoDB project.</li>
-              <li>Confirm your Next.js development server was restarted after creating/modifying <code>.env.local</code> and changing the port in <code>package.json</code>.</li>
-              <li>Look at the terminal console where you ran <code>pnpm dev</code> for more detailed error logs from the <code>fetchVideos</code> function.</li>
+              <li>Ensure your NocoDB instance is running at the URL specified in your server environment (e.g., <code>NC_URL</code>).</li>
+              <li>Verify the <code>NC_TOKEN</code> in your server environment is correct and has read permissions.</li>
+              <li>Check that the table name (e.g., <code>NOCODB_TABLE_NAME</code>) in your server environment exists in your NocoDB project.</li>
+              <li>Confirm your Next.js development server was restarted if environment variables changed.</li>
+              <li>Look at the terminal console where you ran <code>npm run dev</code> for more detailed error logs from the <code>fetchVideos</code> function.</li>
             </ul>
           </p>
         </>

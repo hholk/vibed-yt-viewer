@@ -22,7 +22,8 @@ const videoCache = new Map<string, Promise<Video | null>>();
  * Schema for NocoDB attachment objects
  * Represents file attachments in NocoDB records (e.g., thumbnails, documents)
  */
-const nocoDBAttachmentSchema = z.object({
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _nocoDBAttachmentSchema = z.object({
   url: z.string().url(),
   id: z.string().optional(),
   title: z.string().optional().nullable(),
@@ -31,7 +32,7 @@ const nocoDBAttachmentSchema = z.object({
   thumbnails: z.record(z.object({ signedUrl: z.string().url().optional() })).optional().nullable(),
   signedUrl: z.string().url().optional(),
 }).passthrough();
-export type NocoDBAttachment = z.infer<typeof nocoDBAttachmentSchema>;
+export type NocoDBAttachment = z.infer<typeof _nocoDBAttachmentSchema>;
 
 /**
  * Transforms empty objects to null for cleaner data handling
@@ -70,7 +71,7 @@ const stringToArrayOrNullPreprocessor = (val: unknown): string[] | null => {
  * @param val - Input value (string, array, or object)
  * @returns Array of linked record items or null if input is invalid
  */
-const stringToLinkedRecordArrayPreprocessor = (val: unknown): Array<{ Id?: any; Title?: string | null; name?: string | null }> | null => {
+const stringToLinkedRecordArrayPreprocessor = (val: unknown): Array<{ Id?: number | string; Title?: string | null; name?: string | null }> | null => {
   if (typeof val === 'string') {
     if (val.trim() === '') return [];
     return val.split('\n').map(s => s.trim()).filter(s => s !== '').map(itemTitle => ({ Title: itemTitle, name: itemTitle }));
@@ -89,7 +90,7 @@ const stringToLinkedRecordArrayPreprocessor = (val: unknown): Array<{ Id?: any; 
  * Represents a reference to another record in the database
  */
 const linkedRecordItemSchema = z.object({
-  Id: z.any().optional(), 
+  Id: z.union([z.number(), z.string()]).optional(), 
   Title: z.string().optional().nullable(), 
   name: z.string().optional().nullable(),  
   
@@ -115,7 +116,7 @@ export const videoSchema = z.object({
             return val[0].url; 
           }
           return null; 
-        } catch (e) {
+        } catch {
           
           return null; 
         }
@@ -180,7 +181,7 @@ export const videoSchema = z.object({
   Transcript: z.string().optional().nullable().default(null), 
 
   
-  KeyNumbersData: z.unknown().optional().nullable().default(null), 
+  KeyNumbersData: z.string().optional().nullable().default(null), 
   KeyExamples: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
   BookMediaRecommendations: z.preprocess(emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
   RelatedURLs: z.preprocess(emptyObjectToNull, z.array(z.string().url()).nullable().default([]).optional()),
@@ -281,66 +282,15 @@ const apiClient = axios.create({
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * Updates a video record in NocoDB
- * 
- * @param recordId - The ID of the record to update
- * @param data - Partial video object containing fields to update
- * @param ncProjectIdParam - Optional override for NocoDB project ID
- * @param ncTableNameParam - Optional override for NocoDB table name
- * @returns The updated video record
- * @throws Error if the update fails or response validation fails
+ * Options for fetching videos from NocoDB.
+ * @template T - The schema type for video items.
  */
-export async function updateVideo(
-  recordId: number,
-  data: Partial<z.infer<typeof videoSchema>>,
-  ncProjectIdParam?: string,
-  ncTableNameParam?: string
-): Promise<Video> {
-  const currentNcUrl = process.env.NEXT_PUBLIC_NC_URL;
-  const currentNcToken = process.env.NEXT_PUBLIC_NC_TOKEN;
-  const tableName = ncTableNameParam || process.env.NEXT_PUBLIC_NOCODB_TABLE_NAME || 'youtubeTranscripts';
-  const projectId = ncProjectIdParam || process.env.NEXT_PUBLIC_NOCODB_PROJECT_ID || 'phk8vxq6f1ev08h';
-
-  if (!currentNcUrl || !currentNcToken) {
-    throw new Error('NocoDB URL or token is not configured. Please check your environment variables.');
-  }
-
-  try {
-    
-    const client = axios.create({
-      baseURL: currentNcUrl,
-      headers: {
-        'Content-Type': 'application/json',
-        'xc-token': currentNcToken,
-      },
-    });
-
-    const response = await client.patch(
-      `/api/v1/db/data/noco/${projectId}/${tableName}/${recordId}`,
-      data
-    );
-
-    
-    const parsed = videoSchema.safeParse(response.data);
-    if (!parsed.success) {
-      console.error('NocoDB API response validation failed:', parsed.error);
-      throw new Error('Received invalid data format from NocoDB');
-    }
-
-    return parsed.data;
-  } catch (error: any) {
-    console.error(`Error updating video record ${recordId}:`, error.response?.data || error.message);
-    throw new Error(`Failed to update video record: ${error.message}`);
-  }
-}
-
 interface FetchVideosOptions<T extends z.ZodTypeAny> {
   sort?: string;
   limit?: number;
   page?: number;
   fields?: string[];
   schema?: T;
-  
   /**
    * Override for NocoDB project ID
    */
@@ -365,21 +315,25 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
   /**
    * Get the current NocoDB URL and token from environment variables
    */
-  const currentNcUrl = process.env.NEXT_PUBLIC_NC_URL;
-  const currentNcToken = process.env.NEXT_PUBLIC_NC_TOKEN;
+  const currentNcUrl = process.env.NC_URL;
+  const currentNcToken = process.env.NC_TOKEN;
   
   /**
    * Determine the NocoDB table name and project ID to use
    */
-  const tableName = options?.ncTableName || process.env.NEXT_PUBLIC_NOCODB_TABLE_NAME || 'youtubeTranscripts';
-  const projectId = options?.ncProjectId || process.env.NEXT_PUBLIC_NOCODB_PROJECT_ID || 'phk8vxq6f1ev08h';
+  const tableName = options?.ncTableName || process.env.NOCODB_TABLE_NAME || 'youtubeTranscripts';
+  const projectId = options?.ncProjectId || process.env.NOCODB_PROJECT_ID || process.env.NC_PROJECT_ID || 'phk8vxq6f1ev08h';
 
   /**
    * Check if NocoDB credentials are configured
    */
   if (!currentNcUrl || !currentNcToken) {
-    console.error('NocoDB URL or Token is not configured.');
-    throw new Error('NocoDB credentials not configured.');
+    console.error('NocoDB URL (NC_URL) or Token (NC_TOKEN) is not configured for fetchVideos.');
+    throw new Error('NocoDB credentials not configured. Check server environment variables.');
+  }
+  if (!projectId || !tableName) {
+    console.error('NocoDB Project ID (NOCODB_PROJECT_ID or NC_PROJECT_ID) or Table Name (NOCODB_TABLE_NAME) is not configured for fetchVideos.');
+    throw new Error('NocoDB project/table details not configured. Check server environment variables.');
   }
 
   /**
@@ -398,10 +352,10 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
   /**
    * Construct the request parameters
    */
-  const params: Record<string, any> = {
+  const params: Record<string, unknown> = {
     limit: limit,
     offset: offset,
-    shuffle: 0,
+    shuffle: 0, // Default, can be overridden if NocoDB supports it differently
   };
 
   /**
@@ -436,8 +390,8 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
     const parsedResponse = responseSchema.safeParse(response.data);
 
     if (!parsedResponse.success) {
-      console.error(`Failed to parse NocoDB response (Page: ${page}, Limit: ${limit}, Fields: ${params.fields || 'all'}, Schema: ${schemaToUse.description || 'video schema'}):`, parsedResponse.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
-      
+      console.error(`Failed to parse NocoDB response (Page: ${page}, Limit: ${limit}, Fields: ${params.fields || 'all'}, Sort: ${params.sort || 'default'}, Schema: ${schemaToUse.description || 'videoSchema'}):`, parsedResponse.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
+      console.error(`Problematic NocoDB data (fetchVideos):`, JSON.stringify(response.data, null, 2));
       throw new Error(`Failed to parse NocoDB API response for page ${page}.`);
     }
     
@@ -446,16 +400,27 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
      */
     return { videos: parsedResponse.data.list as z.infer<T>[], pageInfo: parsedResponse.data.pageInfo };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     /**
      * Handle any errors that occur during the request
      */
-    const requestUrl = error.config?.url || 'URL not available';
-    console.error(`Error fetching videos (Page ${page}, Limit ${limit}) from URL: ${requestUrl}:`, error.response?.data || error.message);
-    if (error.message.startsWith('Failed to parse NocoDB API response')) {
+    let requestUrl = 'URL not available';
+    let requestParams = 'Params not available';
+    let responseDataMessage = 'Unknown error cause';
+
+    if (axios.isAxiosError(error)) {
+      requestUrl = error.config?.url || requestUrl;
+      requestParams = error.config?.params ? JSON.stringify(error.config.params) : requestParams;
+      responseDataMessage = JSON.stringify(error.response?.data) || error.message;
+    } else if (error instanceof Error) {
+      responseDataMessage = error.message;
+    }
+
+    console.error(`Error fetching videos (Page ${page}, Limit ${limit}) from URL: ${requestUrl} with params: ${requestParams}:`, responseDataMessage);
+    if (error instanceof Error && error.message.startsWith('Failed to parse NocoDB API response')) {
         throw error;
     }
-    throw new Error(`Failed to fetch videos from NocoDB (page ${page}, limit ${limit}): ${error.message}`);
+    throw new Error(`Failed to fetch videos from NocoDB (page ${page}, limit ${limit}): ${ (error instanceof Error) ? error.message : 'Unknown cause'}`);
   }
 }
 
@@ -463,33 +428,41 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
  * Fetches a single video by its VideoID from NocoDB
  * 
  * @param videoId - The VideoID of the video to fetch
- * @param ncProjectIdParam - Optional override for NocoDB project ID
- * @param ncTableNameParam - Optional override for NocoDB table name
+ * @param options - Configuration options for the request
+ * @param forceFetch - Force a new fetch even if the video is cached
  * @returns The video record or null if not found
  * @throws Error if the request fails or response validation fails
  */
-export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: string, ncTableNameParam?: string): Promise<Video | null> {
+interface FetchVideoByIdOptions {
+  ncProjectId?: string;
+  ncTableName?: string;
+}
+export async function fetchVideoByVideoId(videoId: string, options?: FetchVideoByIdOptions, forceFetch = false): Promise<Video | null> {
   // Check if the video is already cached
-  if (videoCache.has(videoId)) {
+  if (videoCache.has(videoId) && !forceFetch) {
     return videoCache.get(videoId)!;
   }
 
   // Get the current NocoDB URL and token from environment variables
-  const currentNcUrl = process.env.NEXT_PUBLIC_NC_URL;
-  const currentNcToken = process.env.NEXT_PUBLIC_NC_TOKEN;
+  const currentNcUrl = process.env.NC_URL;
+  const currentNcToken = process.env.NC_TOKEN;
   
   // Determine the NocoDB table name and project ID to use
-  const tableName = ncTableNameParam || process.env.NEXT_PUBLIC_NOCODB_TABLE_NAME || 'youtubeTranscripts';
-  const projectId = ncProjectIdParam || process.env.NEXT_PUBLIC_NOCODB_PROJECT_ID || 'phk8vxq6f1ev08h';
+  const tableName = options?.ncTableName || process.env.NOCODB_TABLE_NAME || 'youtubeTranscripts';
+  const projectId = options?.ncProjectId || process.env.NOCODB_PROJECT_ID || process.env.NC_PROJECT_ID || 'phk8vxq6f1ev08h';
 
   // Check if NocoDB credentials are configured
   if (!currentNcUrl || !currentNcToken) {
-    console.error('NocoDB URL or Token is not configured for fetchVideoByVideoId.');
-    throw new Error('NocoDB credentials not configured.');
+    console.error('NocoDB URL (NC_URL) or Token (NC_TOKEN) is not configured for fetchVideoByVideoId.');
+    throw new Error('NocoDB credentials not configured. Check server environment variables.');
+  }
+  if (!projectId || !tableName) {
+    console.error('NocoDB Project ID (NOCODB_PROJECT_ID or NC_PROJECT_ID) or Table Name (NOCODB_TABLE_NAME) is not configured for fetchVideoByVideoId.');
+    throw new Error('NocoDB project/table details not configured. Check server environment variables.');
   }
 
   // Make the request to NocoDB
-  const fetchPromise = (async () => {
+  const fetchPromise = (async (): Promise<Video | null> => {
     try {
       const response = await apiClient.get(
         `${currentNcUrl}/api/v1/db/data/noco/${projectId}/${tableName}/find-one`,
@@ -497,6 +470,8 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
           headers: { 'xc-token': currentNcToken },
           params: { 
             where: `(VideoID,eq,${videoId})`,
+            // Consider adding fields parameter if not all fields from videoSchema are needed by default
+            // fields: 'Id,VideoID,URL,ThumbHigh,Title,Channel,Duration,ViewCount,LikeCount,PublishedAt,PersonalComment,ImportanceRating'
           },
         }
       );
@@ -506,6 +481,7 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
 
       if (!response.data || Object.keys(response.data).length === 0) {
         console.warn(`[fetchVideoByVideoId - ${videoId}] No data returned from NocoDB or data is empty object.`);
+        videoCache.delete(videoId); // Ensure cache is cleared for empty/not found results
         return null; 
       }
 
@@ -514,10 +490,11 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
       if (!parsedVideo.success) {
         console.error(`[fetchVideoByVideoId - ${videoId}] Failed to parse NocoDB response. Issues:`, parsedVideo.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('\n'));
         console.error(`[fetchVideoByVideoId - ${videoId}] Problematic NocoDB data for find-one (VideoID: ${videoId}):`, JSON.stringify(response.data, null, 2));
+        videoCache.delete(videoId); // Ensure cache is cleared on parse failure
         throw new Error(`Failed to parse NocoDB API response for VideoID ${videoId}.`);
       }
       return parsedVideo.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle any errors that occur during the request
       videoCache.delete(videoId);
       
@@ -525,11 +502,17 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
         console.warn(`Video with VideoID ${videoId} not found in NocoDB (404).`);
         return null;
       }
-      console.error(`Error fetching video by VideoID ${videoId}:`, error.response?.data || error.message);
-      if (error.message.startsWith('Failed to parse NocoDB API response')) {
+      let errorMessage = 'Unknown error';
+      if (axios.isAxiosError(error)) {
+        errorMessage = JSON.stringify(error.response?.data) || error.message;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      console.error(`Error fetching video by VideoID ${videoId}:`, errorMessage);
+      if (error instanceof Error && error.message.startsWith('Failed to parse NocoDB API response')) {
         throw error;
       }
-      throw new Error(`Failed to fetch video (VideoID: ${videoId}) from NocoDB: ${error.message}`);
+      throw new Error(`Failed to fetch video (VideoID: ${videoId}) from NocoDB: ${ (error instanceof Error) ? error.message : 'Unknown cause'}`);
     }
   })();
 

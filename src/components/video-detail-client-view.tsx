@@ -201,8 +201,8 @@ export default function VideoDetailClientView({ video, allVideos, currentSort }:
         {renderStarRating(video.ImportanceRating)}
         {renderDetailItem("Personal Comment", video.PersonalComment)}
 
-        {renderStringList(video.BookMediaRecommandations, "Book/Media Recommendations")}
-        {renderUrlList(video.URLs, "Associated URLs")}
+        {renderStringList(video.BookMediaRecommendations, "Book/Media Recommendations")}
+        {renderUrlList(video.RelatedURLs, "Associated URLs")}
         
         {renderDetailItem("Video Genre", video.VideoGenre)}
 
@@ -211,7 +211,7 @@ export default function VideoDetailClientView({ video, allVideos, currentSort }:
         {renderBadgeList(video.Indicators, "Indicators")}
         {renderBadgeList(video.Trends, "Trends")}
         {renderBadgeList(video.InvestableAssets, "Investable Assets")}
-        {renderBadgeList(video.Ticker, "$Ticker")}
+        {renderBadgeList(video.TickerSymbol ? [video.TickerSymbol] : null, "$Ticker")}
         {renderBadgeList(video.Institutions, "Institutions")}
         {renderStringList(video.EventsFairs, "Events/Fairs")}
 
@@ -221,7 +221,7 @@ export default function VideoDetailClientView({ video, allVideos, currentSort }:
             <ul className="list-disc list-inside pl-2 space-y-0.5 text-base text-foreground">
               {video.DOIs.map((doi, idx) => (
                 <li key={idx}>
-                  <a href={`https:
+                  <a href={`https://doi.org/${doi}`} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline break-all">
                     {doi}
                   </a>
                 </li>
@@ -258,7 +258,7 @@ export default function VideoDetailClientView({ video, allVideos, currentSort }:
               </h2>
               <div className="prose max-w-none text-foreground/90">
                 <div className="space-y-4">
-                  {(video.FullTranscript || video.Transcript)
+                  {((video.FullTranscript || video.Transcript) ?? '')
                     .split('\n\n')
                     .filter(Boolean)
                     .map((block, index) => {

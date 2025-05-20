@@ -3,10 +3,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Video, VideoListItem } from '@/lib/nocodb';
-import { updateVideo } from '@/lib/nocodb';
+import { handleUpdateVideoDetailsAction } from '@/lib/actions';
+import type { VideoUpdatePayload } from '@/lib/video-service';
 import { StarRating } from '@/components/StarRating';
 
 export type { Video, VideoListItem } from '@/lib/nocodb';
@@ -110,7 +112,7 @@ const DetailItem = React.memo<DetailItemProps>(({
 
     if (isImage && typeof value === 'string' && value) {
       
-      return <img src={value} alt={label} className="max-w-xs max-h-48 object-contain rounded-md my-2" />;
+      return <Image src={value as string} alt={label} width={320} height={192} className="max-w-xs max-h-48 object-contain rounded-md my-2" />;
     }
 
     if (isLink && typeof value === 'string' && value) {
@@ -245,42 +247,131 @@ export function VideoDetailPageContent({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [currentVideo, setCurrentVideo] = useState<Video>(video);
-  const [isEditingComment, setIsEditingComment] = useState(false);
-  const [personalComment, setPersonalComment] = useState(video.PersonalComment || '');
-  const [isSaving, setIsSaving] = useState(false); 
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [originalVideo, setOriginalVideo] = useState<Video>(video); // For reverting optimistic updates
+  // For editing personal comment
+  const [personalComment, setPersonalComment] = useState<string>(currentVideo.PersonalComment || '');
+  const [isEditingComment, setIsEditingComment] = useState<boolean>(false);
+  // For loading/saving states
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveError, setSaveError] = useState<string | null>(null); // For displaying errors
   
+  const [activeImportanceRating, setActiveImportanceRating] = useState<number | null>(() => {
+    const ratingValue: unknown = currentVideo.ImportanceRating;
+    let numericRating: number | null = null;
+    if (typeof ratingValue === 'string' && ratingValue.trim() !== '') {
+      const parsed = parseInt(ratingValue, 10);
+      if (!isNaN(parsed)) {
+        numericRating = parsed;
+      }
+    }
+    return numericRating;
+  });
   
-  const [activeImportanceRating, setActiveImportanceRating] = useState<number | null>(video.ImportanceRating || null);
-  
-  
-  
-  
-  
-
   useEffect(() => {
     setCurrentVideo(video);
+    setOriginalVideo(video); // Initialize originalVideo
     setPersonalComment(video.PersonalComment || '');
+    const ratingValue: unknown = video.ImportanceRating;
+    let numericRating: number | null = null;
+    if (typeof ratingValue === 'string' && ratingValue.trim() !== '') {
+      const parsed = parseInt(ratingValue, 10);
+      if (!isNaN(parsed)) {
+        numericRating = parsed;
+      }
+    }
+    setActiveImportanceRating(numericRating);
+    // Reset editing states when video prop changes
     setIsEditingComment(false);
+    setIsSaving(false);
     setSaveError(null);
-    setActiveImportanceRating(video.ImportanceRating || null);
-    
-    
-    
   }, [video]);
 
-  
-  useEffect(() => {
-    const currentQuery = searchParams.toString();
-    const queryString = currentQuery ? `?${currentQuery}` : '';
+  const handleImportanceRatingChange = useCallback(async (newRating: number | null) => {
+    if (!currentVideo?.VideoID) {
+      alert('Error: VideoID is missing. Cannot update rating.');
+      return;
+    }
+    // Optimistically update UI
+    setActiveImportanceRating(newRating);
+    setIsSaving(true);
+    setSaveError(null);
 
-    if (previousVideo?.Id) {
-      router.prefetch(`/video/${previousVideo.Id}${queryString}`);
+    try {
+      const videoIdStr = String(currentVideo.VideoID);
+      const payload: Partial<VideoUpdatePayload> = { ImportanceRating: newRating };
+      const updated = await handleUpdateVideoDetailsAction(videoIdStr, payload);
+      
+      if (updated) {
+        setCurrentVideo(updated);
+        setOriginalVideo(updated);
+        // Ensure activeImportanceRating reflects the saved value (might be null)
+        const updatedRatingValue: unknown = updated.ImportanceRating;
+        let numericRatingUpdated: number | null = null;
+        if (typeof updatedRatingValue === 'string' && updatedRatingValue.trim() !== '') {
+          const parsed = parseInt(updatedRatingValue, 10);
+          if (!isNaN(parsed)) {
+            numericRatingUpdated = parsed;
+          }
+        }
+        setActiveImportanceRating(numericRatingUpdated);
+        alert('Importance rating updated successfully!');
+      } else {
+        console.error('Failed to update Importance Rating: Server action returned null or update was not applied as expected.');
+        alert('Failed to update rating. The video data could not be refreshed. Please try again.');
+        // Revert optimistic update if newRating was set prior to this, or refresh data.
+        // For now, we are showing an error. The original activeImportanceRating is still from before the try block.
+      }
+    } catch (error) {
+      console.error('Failed to update Importance Rating:', error);
+      alert(`Error updating rating: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Revert optimistic update
+      const originalRatingValue: unknown = originalVideo.ImportanceRating;
+      let numericRatingOriginal: number | null = null;
+      if (typeof originalRatingValue === 'string' && originalRatingValue.trim() !== '') {
+        const parsed = parseInt(originalRatingValue, 10);
+        if (!isNaN(parsed)) {
+          numericRatingOriginal = parsed;
+        }
+      }
+      setActiveImportanceRating(numericRatingOriginal);
+      setCurrentVideo(originalVideo);
+    } finally {
+      setIsSaving(false);
     }
-    if (nextVideo?.Id) {
-      router.prefetch(`/video/${nextVideo.Id}${queryString}`);
+  }, [currentVideo, originalVideo, setCurrentVideo, setOriginalVideo, setActiveImportanceRating, setIsSaving, setSaveError]);
+
+  const handleReworkSummary = useCallback(async () => {
+    if (!currentVideo || !currentVideo.VideoID) {
+      alert('Error: VideoID is missing. Cannot perform rework action.');
+      return;
     }
-  }, [previousVideo, nextVideo, router, searchParams]);
+    if (!confirm("Are you sure you want to mark this video as reworked? This will clear the 'Detailed Narrative Flow'. This action cannot be undone easily.")) {
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const videoIdStr = String(currentVideo.VideoID);
+      const payload: Partial<VideoUpdatePayload> = { DetailedNarrativeFlow: null };
+      const updated = await handleUpdateVideoDetailsAction(videoIdStr, payload);
+      if (updated) {
+        setCurrentVideo(updated);
+        setOriginalVideo(updated);
+        alert('Video marked as reworked. Detailed Narrative Flow has been cleared.');
+      } else {
+        console.error('Failed to mark as reworked: Server action returned null or update was not applied as expected.');
+        alert('Failed to mark as reworked. The video data could not be refreshed. Please try again.');
+      }
+    } catch (error) {
+      console.error('Failed to mark as reworked:', error);
+      alert(`Error marking as reworked: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Optionally revert: setCurrentVideo(originalVideo);
+    } finally {
+      setIsSaving(false);
+    }
+// eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentVideo, originalVideo, setCurrentVideo, setOriginalVideo, setIsSaving, setSaveError]);
 
   const navigateToVideo = useCallback((direction: 'prev' | 'next') => {
     const currentQuery = searchParams.toString();
@@ -298,93 +389,35 @@ export function VideoDetailPageContent({
     }
   }, [previousVideo, nextVideo, router, searchParams]);
 
-  const handleSaveComment = async () => {
-    if (!currentVideo?.Id) return;
+  const handleSaveComment = useCallback(async () => {
+    if (!currentVideo?.VideoID) {
+      alert('Error: VideoID is missing. Cannot save comment.');
+      return;
+    }
     setIsSaving(true);
     setSaveError(null);
     try {
-      const updatedFields = { PersonalComment: personalComment };
-      await updateVideo(currentVideo.Id, updatedFields);
-      setCurrentVideo(prev => ({ ...prev!, ...updatedFields }));
-      setIsEditingComment(false);
-    } catch (error) {
-      console.error('Failed to save comment:', error);
-      setSaveError(error instanceof Error ? error.message : 'An unknown error occurred.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-  
-  
-  const handleRatingChange = async (newRating: number | null, field: keyof Video) => {
-    if (!currentVideo?.Id) return;
-
-    
-    if (field === 'ImportanceRating') {
-      setActiveImportanceRating(newRating);
-    }
-    
-
-    setIsSaving(true); 
-    setSaveError(null);
-    try {
-      const updatedFields = { [field]: newRating };
-      await updateVideo(currentVideo.Id, updatedFields);
-      setCurrentVideo(prev => ({ ...prev!, ...updatedFields as Partial<Video> }));
-    } catch (error) {
-      console.error(`Failed to save ${field}:`, error);
-      setSaveError(error instanceof Error ? error.message : `Failed to save ${String(field)}.`);
-      
-      if (field === 'ImportanceRating') {
-        setActiveImportanceRating(currentVideo.ImportanceRating || null);
+      const videoIdStr = String(currentVideo.VideoID);
+      const payload: Partial<VideoUpdatePayload> = { PersonalComment: personalComment };
+      const updated = await handleUpdateVideoDetailsAction(videoIdStr, payload);
+      if (updated) {
+        setCurrentVideo(updated);
+        setOriginalVideo(updated); 
+        setIsEditingComment(false);
+        alert('Personal comment updated successfully!');
+      } else {
+        console.error('Failed to save personal comment: Server action returned null or update was not applied as expected.');
+        alert('Failed to save comment. The video data could not be refreshed. Please try again.');
       }
-      
+    } catch (error) {
+      console.error('Failed to save personal comment:', error);
+      alert(`Error saving comment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Optionally revert: setCurrentVideo(originalVideo); setPersonalComment(originalVideo.PersonalComment || '');
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [currentVideo, personalComment, setCurrentVideo, setOriginalVideo, setIsSaving, setSaveError, setIsEditingComment]);
 
-  
-  
-  
-  
-  
-
-  
-  
-  
-  
-  
-  
-  
-  
-
-  
-  
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-
-  
-  
-  
-
-  
   const detailFieldOrder: (keyof Video)[] = [
     'ThumbHigh',
     'URL',
@@ -478,42 +511,65 @@ export function VideoDetailPageContent({
           {}
           <div className="md:col-span-2 space-y-4">
             {detailFieldOrder.map((fieldKey: keyof Video) => {
-              let value = currentVideo[fieldKey]; 
+              let originalValue: Video[keyof Video] = currentVideo[fieldKey];
               const label = formatFieldName(String(fieldKey));
 
-              
-              if (typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length === 0) {
-                value = null;
+              // 1. Handle literal empty objects
+              if (typeof originalValue === 'object' && originalValue !== null && !Array.isArray(originalValue) && Object.keys(originalValue).length === 0) {
+                originalValue = null;
               }
 
-              if (value === null || value === undefined || 
-                 (typeof value === 'string' && value.trim() === '') ||
-                 (Array.isArray(value) && value.length === 0)
+              // 2. Skip rendering if value is essentially empty
+              if (originalValue === null || originalValue === undefined ||
+                 (typeof originalValue === 'string' && originalValue.trim() === '') ||
+                 (Array.isArray(originalValue) && originalValue.length === 0)
               ) {
-                return null; 
+                return null;
               }
 
+              // 3. Determine rendering flags based on originalValue
+              const isImg = fieldKey === 'ThumbHigh'; // Expects string URL
+              const isLnk = fieldKey === 'URL' || 
+                            (fieldKey === 'RelatedURLs' && Array.isArray(originalValue) && originalValue.every(item => typeof item === 'string' && item.startsWith('http'))); // Expects array of string URLs
+              const isArr = Array.isArray(originalValue);
+              const isMd = MARKDOWN_FIELDS.includes(String(fieldKey)) ||
+                           fieldKey === 'Description' ||
+                           fieldKey === 'Transcript' ||
+                           (typeof originalValue === 'string' && originalValue.length > 100 && !isLnk && !isImg);
+
+              let displayValue = originalValue;
+
+              // 4. Sanitize: If originalValue was an object (and not an array, and not already handled as an image/link URL string), stringify it.
+              if (typeof originalValue === 'object' && originalValue !== null && !isArr) {
+                if (!isImg && !isLnk) { 
+                  // It's a generic object not handled as a special string type (image/link URL)
+                  console.warn(`[VideoDetailPageContent] Field '${String(fieldKey)}' is an object and will be stringified. Value:`, originalValue);
+                  displayValue = JSON.stringify(originalValue, null, 2);
+                } else if (typeof originalValue !== 'string') {
+                  // It was flagged as isImg or isLnk, but originalValue is not a string (it's an object).
+                  // This indicates a data issue or an unexpected object structure for an img/link field.
+                  console.warn(`[VideoDetailPageContent] Field '${String(fieldKey)}' flagged as img/lnk but is an object. Stringifying. Value:`, originalValue);
+                  displayValue = JSON.stringify(originalValue, null, 2);
+                }
+                // If it was isImg or isLnk AND originalValue was already a string, displayValue correctly remains that string.
+              }
+              
               let isInitiallyCollapsed = true;
               const initiallyExpandedFields = ['ThumbHigh', 'URL', 'ActionableAdvice', 'TLDR', 'MainSummary', 'Description', 'Transcript'];
               if (initiallyExpandedFields.includes(String(fieldKey))) {
                 isInitiallyCollapsed = false;
               }
-              
-              const isImg = fieldKey === 'ThumbHigh';
-              const isLnk = fieldKey === 'URL' || (fieldKey === 'RelatedURLs' && Array.isArray(value) && value.every(item => typeof item === 'string' && item.startsWith('http')));
-              const isMd = MARKDOWN_FIELDS.includes(String(fieldKey)) || fieldKey === 'Description' || fieldKey === 'Transcript' || (typeof value === 'string' && String(value).length > 100 && !isLnk && !isImg); 
-              const isArr = Array.isArray(value);
 
               return (
                 <DetailItem
                   key={String(fieldKey)}
                   label={label}
-                  value={value}
+                  value={displayValue as FieldValue} // Pass the sanitized displayValue
                   isInitiallyCollapsed={isInitiallyCollapsed}
-                  isMarkdown={isMd}
-                  isImage={isImg}
-                  isLink={isLnk}
-                  isList={isArr && !isLnk && !isImg && !isMd} 
+                  isMarkdown={isMd} // isMd is based on originalValue's nature
+                  isImage={isImg && typeof displayValue === 'string'} // Only treat as image if displayValue is a string (URL)
+                  isLink={isLnk && (typeof displayValue === 'string' || (Array.isArray(displayValue) && displayValue.every(item => typeof item === 'string')))} // Link can be string or array of strings
+                  isList={isArr && !isLnk && !isImg && !isMd} // isList also based on originalValue's nature (being an array)
                 />
               );
             })}
@@ -527,8 +583,8 @@ export function VideoDetailPageContent({
             <div className="p-4 bg-neutral-800 rounded-lg shadow">
               <h3 className="text-lg font-semibold mb-2 text-neutral-300">Importance Rating</h3>
               <StarRating
-                value={activeImportanceRating ?? 0}
-                onChange={(newRating: number) => handleRatingChange(newRating, 'ImportanceRating')}
+                value={typeof activeImportanceRating === 'number' ? activeImportanceRating : null}
+                onChange={handleImportanceRatingChange}
                 size={28}
                 readOnly={isSaving}
               />
@@ -598,6 +654,29 @@ export function VideoDetailPageContent({
                 {currentVideo.UpdatedAt && <p>Last Updated: {new Date(currentVideo.UpdatedAt).toLocaleString()}</p>}
                 {currentVideo.PublishedAt && <p>Published: {new Date(currentVideo.PublishedAt).toLocaleString()}</p>}
             </div>
+
+            {/* Rework Summary Action Card */}
+            <div className="p-4 bg-neutral-800 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-3 text-neutral-300">Rework Summary</h3>
+              <button
+                onClick={handleReworkSummary}
+                className="w-full px-4 py-2.5 text-sm font-medium rounded-md bg-yellow-600 hover:bg-yellow-500 text-white transition-colors flex items-center justify-center"
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <>
+                    <ChevronDown className="animate-spin h-5 w-5 mr-2" /> Processing...
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle size={18} className="mr-2" /> Mark as Reworked (Clear Narrative)
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-neutral-400 mt-2">
+                This will clear the &apos;Detailed Narrative Flow&apos; field. This action is useful if you plan to regenerate or significantly revise this section.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -606,3 +685,4 @@ export function VideoDetailPageContent({
 };
 
 export default VideoDetailPageContent;
+

@@ -13,50 +13,50 @@ declare module 'next/link' {
     prefetch?: boolean;
     locale?: string | false;
     legacyBehavior?: boolean;
-    onError?(error: any): void;
+    onError?(error: Error): void;
   }
 
   const Link: ComponentType<LinkProps>;
   export default Link;
 }
 
-declare module 'next/image' {
-  import { ComponentPropsWithoutRef, CSSProperties } from 'react';
-  
-  type ImageProps = Omit<ComponentPropsWithoutRef<'img'>, 'src' | 'srcSet' | 'ref' | 'width' | 'height' | 'loading'> & {
-    src: string | StaticImport;
-    width?: number | string;
-    height?: number | string;
-    layout?: 'fixed' | 'intrinsic' | 'responsive' | 'fill';
-    loader?: (resolverProps: ImageLoaderProps) => string;
-    quality?: number | string;
-    priority?: boolean;
-    loading?: 'lazy' | 'eager';
-    placeholder?: 'blur' | 'empty';
-    blurDataURL?: string;
-    unoptimized?: boolean;
-    objectFit?: CSSProperties['objectFit'];
-    objectPosition?: CSSProperties['objectPosition'];
-    onLoadingComplete?: (result: { naturalWidth: number; naturalHeight: number }) => void;
-    onError?: (error: any) => void;
-  };
-
-  interface ImageLoaderProps {
-    src: string;
-    width: number;
-    quality?: number;
-  }
-
-  interface StaticImport {
-    src: string;
-    height: number;
-    width: number;
-    blurDataURL?: string;
-  }
-
-  const Image: React.FC<ImageProps>;
-  export default Image;
-}
+// declare module 'next/image' {
+//   import { ComponentPropsWithoutRef, CSSProperties } from 'react';
+//   
+//   type ImageProps = Omit<ComponentPropsWithoutRef<'img'>, 'src' | 'srcSet' | 'ref' | 'width' | 'height' | 'loading'> & {
+//     src: string | StaticImport;
+//     width?: number | string;
+//     height?: number | string;
+//     layout?: 'fixed' | 'intrinsic' | 'responsive' | 'fill';
+//     loader?: (resolverProps: ImageLoaderProps) => string;
+//     quality?: number | string;
+//     priority?: boolean;
+//     loading?: 'lazy' | 'eager';
+//     placeholder?: 'blur' | 'empty';
+//     blurDataURL?: string;
+//     unoptimized?: boolean;
+//     objectFit?: CSSProperties['objectFit'];
+//     objectPosition?: CSSProperties['objectPosition'];
+//     onLoadingComplete?: (result: { naturalWidth: number; naturalHeight: number }) => void;
+//     onError?: (error: Error) => void;
+//   };
+// 
+//   interface ImageLoaderProps {
+//     src: string;
+//     width: number;
+//     quality?: number;
+//   }
+// 
+//   interface StaticImport {
+//     src: string;
+//     height: number;
+//     width: number;
+//     blurDataURL?: string;
+//   }
+// 
+//   const Image: React.FC<ImageProps>;
+//   export default Image;
+// }
 
 declare namespace NodeJS {
   interface ProcessEnv {
@@ -70,7 +70,8 @@ declare namespace NodeJS {
 declare global {
   namespace JSX {
     interface IntrinsicElements {
-      
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      [elemName: string]: any; // Allows any standard or custom elements
     }
   }
 }
