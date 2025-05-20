@@ -158,15 +158,9 @@ export async function updateVideoDetails(
     // Clear caches
     recordIdCache.delete(videoId);
     
-    // Return the directly updated data from the PATCH response if it contains the full record
-    if (response.data && typeof response.data === 'object' && 'Id' in response.data) {
-      console.log(`[updateVideoDetails] Using direct response data for VideoID ${videoId}.`);
-      return response.data as Video;
-    }
-    
     // Fallback to re-fetching the full record if the PATCH response doesn't contain it
     console.log(`[updateVideoDetails] Re-fetching updated video data for VideoID ${videoId}.`);
-    const updatedVideo = await fetchVideoByVideoId(videoId);
+    const updatedVideo = await fetchVideoByVideoId(videoId, undefined, true);
 
     if (!updatedVideo) {
       console.error(`[updateVideoDetails] Failed to re-fetch video data for VideoID ${videoId} after update.`);

@@ -254,15 +254,26 @@ export function VideoDetailPageContent({
   // For loading/saving states
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null); // For displaying errors
+
+  useEffect(() => {
+    console.log('[VideoDetailPageContent] currentVideo state changed. Rating:', currentVideo?.ImportanceRating, 'Comment:', currentVideo?.PersonalComment);
+  }, [currentVideo]);
   
   const [activeImportanceRating, setActiveImportanceRating] = useState<number | null>(() => {
-    const ratingValue: unknown = currentVideo.ImportanceRating;
+    const ratingValue: unknown = currentVideo.ImportanceRating; // currentVideo is 'video' prop on initial render
     let numericRating: number | null = null;
-    if (typeof ratingValue === 'string' && ratingValue.trim() !== '') {
+    if (typeof ratingValue === 'number') {
+      numericRating = ratingValue;
+    } else if (typeof ratingValue === 'string' && ratingValue.trim() !== '') {
       const parsed = parseInt(ratingValue, 10);
       if (!isNaN(parsed)) {
         numericRating = parsed;
       }
+    }
+    // Safety check for initial load
+    if (numericRating !== null && (numericRating < 1 || numericRating > 5)) {
+      console.warn(`[useState activeImportanceRating init] Invalid rating value ${numericRating}, treating as null.`);
+      numericRating = null;
     }
     return numericRating;
   });
@@ -273,11 +284,18 @@ export function VideoDetailPageContent({
     setPersonalComment(video.PersonalComment || '');
     const ratingValue: unknown = video.ImportanceRating;
     let numericRating: number | null = null;
-    if (typeof ratingValue === 'string' && ratingValue.trim() !== '') {
+    if (typeof ratingValue === 'number') {
+      numericRating = ratingValue;
+    } else if (typeof ratingValue === 'string' && ratingValue.trim() !== '') {
       const parsed = parseInt(ratingValue, 10);
       if (!isNaN(parsed)) {
         numericRating = parsed;
       }
+    }
+    // Safety check
+    if (numericRating !== null && (numericRating < 1 || numericRating > 5)) {
+      console.warn(`[useEffect on video change] Invalid rating value ${numericRating} from prop, treating as null.`);
+      numericRating = null;
     }
     setActiveImportanceRating(numericRating);
     // Reset editing states when video prop changes
@@ -300,21 +318,28 @@ export function VideoDetailPageContent({
       const videoIdStr = String(currentVideo.VideoID);
       const payload: Partial<VideoUpdatePayload> = { ImportanceRating: newRating };
       const updated = await handleUpdateVideoDetailsAction(videoIdStr, payload);
-      
+      console.log('[handleImportanceRatingChange] Received from action. Updated Rating:', updated?.ImportanceRating);
       if (updated) {
         setCurrentVideo(updated);
         setOriginalVideo(updated);
         // Ensure activeImportanceRating reflects the saved value (might be null)
         const updatedRatingValue: unknown = updated.ImportanceRating;
         let numericRatingUpdated: number | null = null;
-        if (typeof updatedRatingValue === 'string' && updatedRatingValue.trim() !== '') {
+        if (typeof updatedRatingValue === 'number') {
+          numericRatingUpdated = updatedRatingValue;
+        } else if (typeof updatedRatingValue === 'string' && updatedRatingValue.trim() !== '') { // Fallback, less likely now
           const parsed = parseInt(updatedRatingValue, 10);
           if (!isNaN(parsed)) {
             numericRatingUpdated = parsed;
           }
         }
+        // Final safety check: ensure value is within 1-5 range if not null
+        if (numericRatingUpdated !== null && (numericRatingUpdated < 1 || numericRatingUpdated > 5)) {
+          console.warn(`[handleImportanceRatingChange] Invalid rating value ${numericRatingUpdated} from server, treating as null.`);
+          numericRatingUpdated = null;
+        }
         setActiveImportanceRating(numericRatingUpdated);
-        alert('Importance rating updated successfully!');
+
       } else {
         console.error('Failed to update Importance Rating: Server action returned null or update was not applied as expected.');
         alert('Failed to update rating. The video data could not be refreshed. Please try again.');
@@ -400,11 +425,12 @@ export function VideoDetailPageContent({
       const videoIdStr = String(currentVideo.VideoID);
       const payload: Partial<VideoUpdatePayload> = { PersonalComment: personalComment };
       const updated = await handleUpdateVideoDetailsAction(videoIdStr, payload);
+      console.log('[handleSaveComment] Received from action. Updated Comment:', updated?.PersonalComment);
       if (updated) {
         setCurrentVideo(updated);
         setOriginalVideo(updated); 
         setIsEditingComment(false);
-        alert('Personal comment updated successfully!');
+
       } else {
         console.error('Failed to save personal comment: Server action returned null or update was not applied as expected.');
         alert('Failed to save comment. The video data could not be refreshed. Please try again.');

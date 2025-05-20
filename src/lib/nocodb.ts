@@ -129,7 +129,25 @@ export const videoSchema = z.object({
   Title: z.string(),
   Channel: z.string().optional().nullable().default(null),
   Description: z.string().optional().nullable().default(null),
-  ImportanceRating: z.number().int().min(1).max(5).optional().nullable().default(null),
+  ImportanceRating: z.preprocess(
+    (val) => {
+      if (val === null || val === undefined) return null;
+      if (val === '') return null;
+
+      if (typeof val === 'string') {
+        const num = parseInt(val, 10);
+        if (!isNaN(num)) {
+          return num;
+        }
+        return null; 
+      }
+      if (typeof val === 'number') {
+        return val;
+      }
+      return null;
+    },
+    z.number().int().min(1).max(5).optional().nullable().default(null)
+  ),
   PersonalComment: z.string().optional().nullable().default(null),
   CreatedAt: z.coerce.date().optional().nullable().default(null),
   UpdatedAt: z.coerce.date().optional().nullable().default(null),
