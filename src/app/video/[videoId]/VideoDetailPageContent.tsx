@@ -20,7 +20,16 @@ const SafeReactMarkdown = ({ children }: SafeReactMarkdownProps) => {
   return <ReactMarkdown>{children}</ReactMarkdown>;
 };
 
-type FieldValue = string | number | boolean | Date | string[] | Record<string, unknown> | Record<string, unknown>[] | null | undefined;
+type FieldValue = string | number | boolean | Date | string[] | Record<string, unknown> | Record<string, unknown>[] | PotentialLinkedItem | PotentialLinkedItem[] | null | undefined;
+
+type PotentialLinkedItem = {
+  Id: string | number;
+  Title?: string;
+  name?: string;
+  url?: string; // For attachments like ThumbHigh
+  // Allow other properties as NocoDB linked records can vary
+  [key: string]: unknown; 
+};
 
 interface VideoDetailPageContentProps {
   video: Video;
@@ -37,16 +46,38 @@ const formatFieldName = (fieldName: string): string => {
     .replace(/^\w/, (c) => c.toUpperCase()); 
 };
 
-const MARKDOWN_FIELDS = [
-  'ActionableAdvice',
-  'TLDR',
-  'MainSummary',
-  'KeyNumbersData',
-  'KeyExamples',
-  'DetailedNarrativeFlow',
-  'MemorableQuotes',
-  'MemorableTakeaways',
-  'Description',
+const VIDEO_DETAIL_FIELDS_CONFIG = [
+  // ThumbHigh and URL are handled separately before the main loop
+  { key: 'ActionableAdvice', label: 'Actionable Advice', isMarkdown: true, isInitiallyCollapsed: true },
+  { key: 'Summary', label: 'TLDR', isMarkdown: true, isInitiallyCollapsed: true }, // Assuming TLDR maps to Summary from schema
+  { key: 'MainSummary', label: 'Main Summary', isMarkdown: true, isInitiallyCollapsed: false }, // Expanded by default
+  { key: 'DetailedNarrativeFlow', label: 'Detailed Narrative Flow', isMarkdown: true, isInitiallyCollapsed: false }, // Expanded by default
+  { key: 'MemorableQuotes', label: 'Memorable Quotes', isMarkdown: true, isList: true, isInitiallyCollapsed: true },
+  { key: 'MemorableTakeaways', label: 'Memorable Takeaways', isMarkdown: true, isList: true, isInitiallyCollapsed: true },
+  { key: 'KeyNumbersData', label: 'Key Numbers Data', isMarkdown: true, isList: true, isInitiallyCollapsed: true },
+  { key: 'KeyExamples', label: 'Key Examples', isMarkdown: true, isList: true, isInitiallyCollapsed: true },
+  { key: 'BookMediaRecommendations', label: 'Book/Media Recommendations', isList: true, isInitiallyCollapsed: true },
+  { key: 'ExternalURLs', label: 'External URLs', isList: true, isLinkList: true, isInitiallyCollapsed: true },
+  { key: 'VideoGenre', label: 'Video Genre', isInitiallyCollapsed: true },
+  { key: 'Persons', label: 'Persons', isList: true, isInitiallyCollapsed: true },
+  { key: 'Companies', label: 'Companies', isList: true, isInitiallyCollapsed: true },
+  { key: 'Indicators', label: 'Indicators', isList: true, isInitiallyCollapsed: true },
+  { key: 'Trends', label: 'Trends', isList: true, isInitiallyCollapsed: true },
+  { key: 'InvestableAssets', label: 'Investable Assets', isList: true, isInitiallyCollapsed: true },
+  { key: 'TickerSymbol', label: '$Ticker', isInitiallyCollapsed: true },
+  { key: 'Institutions', label: 'Institutions', isList: true, isInitiallyCollapsed: true },
+  { key: 'EventsFairs', label: 'Events/Fairs', isList: true, isInitiallyCollapsed: true },
+  { key: 'DOIs', label: 'DOIs', isList: true, isInitiallyCollapsed: true },
+  { key: 'Tags', label: 'Hashtags', isList: true, isInitiallyCollapsed: true }, // Maps to Tags from schema
+  { key: 'MainTopic', label: 'Main Topic', isInitiallyCollapsed: true },
+  { key: 'PrimarySources', label: 'Primary Sources', isList: true, isInitiallyCollapsed: true },
+  { key: 'Sentiment', label: 'Sentiment Score', isInitiallyCollapsed: true },
+  { key: 'SentimentReason', label: 'Sentiment Reason', isMarkdown: true, isInitiallyCollapsed: true },
+  { key: 'Channel', label: 'Channel', isInitiallyCollapsed: true },
+  { key: 'Description', label: 'Video Description (from YouTube)', isMarkdown: true, isInitiallyCollapsed: true },
+  { key: 'TechnicalTerms', label: 'Technical Terms', isList: true, isInitiallyCollapsed: true },
+  { key: 'Speaker', label: 'Speaker', isInitiallyCollapsed: true },
+  { key: 'Transcript', label: 'Transcript', isMarkdown: true, isInitiallyCollapsed: false }, // Expanded by default
 ];
 
 interface DetailItemProps {
@@ -57,6 +88,7 @@ interface DetailItemProps {
   isList?: boolean;
   isMarkdown?: boolean;
   isInitiallyCollapsed?: boolean;
+  isLinkList?: boolean; // Added for lists where each item is a link
 }
 
 const DetailItem = React.memo<DetailItemProps>(({ 
@@ -66,30 +98,26 @@ const DetailItem = React.memo<DetailItemProps>(({
   isImage = false, 
   isList = false, 
   isMarkdown = false, 
-  isInitiallyCollapsed
+  isInitiallyCollapsed,
+  isLinkList = false
 }) => {
+  // Create a unique key for this detail section
+  const storageKey = `detail-${label.toLowerCase().replace(/\s+/g, '-')}-collapsed`;
   
+  // Initialize state from session storage or prop
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return isInitiallyCollapsed ?? true; 
-    
-    if (isInitiallyCollapsed !== undefined) {
-      return isInitiallyCollapsed;
-    }
-    const savedState = localStorage.getItem(`collapsed_${label}`);
-    return savedState ? JSON.parse(savedState) : true; 
+    if (typeof window === 'undefined') return isInitiallyCollapsed ?? true;
+    const stored = sessionStorage.getItem(storageKey);
+    return stored !== null ? stored === 'true' : (isInitiallyCollapsed ?? true);
   });
 
-  
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(`collapsed_${label}`, JSON.stringify(isCollapsed));
-    }
-  }, [isCollapsed, label]);
-
-  const toggleCollapse = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsCollapsed(prev => !prev);
-  }, []);
+  const toggleCollapse = useCallback(() => {
+    setIsCollapsed((prev: boolean) => {
+      const newState = !prev;
+      sessionStorage.setItem(storageKey, String(newState));
+      return newState;
+    });
+  }, [storageKey]);
 
   const isEmpty = value === null || value === undefined || 
                 (Array.isArray(value) && value.length === 0) || 
@@ -117,6 +145,33 @@ const DetailItem = React.memo<DetailItemProps>(({
 
     if (isLink && typeof value === 'string' && value) {
       return <a href={value} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline truncate block max-w-full">{value}</a>;
+    }
+
+    if (isLinkList && Array.isArray(value)) {
+      return (
+        <ul className="list-disc list-inside space-y-1">
+          {value.map((item, index) => {
+            if (typeof item === 'string' && item.startsWith('http')) {
+              return <li key={index}><a href={item} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">{item}</a></li>;
+            } else if (typeof item === 'object' && item !== null) {
+              const linkedItem = item as PotentialLinkedItem;
+              // Handle NocoDB attachment objects (like ThumbHigh, which could be in a list)
+              if (linkedItem.url && typeof linkedItem.url === 'string' && linkedItem.url.startsWith('http')) {
+                return <li key={`linked-${linkedItem.Id || index}-url`}><a href={linkedItem.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">{linkedItem.Title || linkedItem.name || linkedItem.url}</a></li>;
+              }
+              // Handle regular linked records that might have a URL in Title or name
+              const linkCandidate = linkedItem.Title || linkedItem.name;
+              if (typeof linkCandidate === 'string' && linkCandidate.startsWith('http')) {
+                 return <li key={`linked-${linkedItem.Id || index}-cand`}><a href={linkCandidate} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">{linkCandidate}</a></li>;
+              }
+              // If linked item is not a direct URL, display its Title/name or ID
+              return <li key={`linked-${linkedItem.Id || index}-obj`} className="text-neutral-300">{linkedItem.Title || linkedItem.name || `Linked Item: ${linkedItem.Id}`}</li>;
+            }
+            // Fallback for non-URL strings or other primitive types in the array
+            return <li key={`primitive-${index}`} className="text-neutral-300">{String(item)}</li>;
+          })}
+        </ul>
+      );
     }
 
     if (value instanceof Date || (typeof value === 'string' && !isNaN(Date.parse(value)))) {
@@ -238,29 +293,22 @@ const DetailItem = React.memo<DetailItemProps>(({
 
 DetailItem.displayName = 'DetailItem';
 
-export function VideoDetailPageContent({
-  video,
-  
+const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
+  video: initialVideo, 
   previousVideo,
   nextVideo,
-}: VideoDetailPageContentProps) {
+}: VideoDetailPageContentProps) => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [currentVideo, setCurrentVideo] = useState<Video>(video);
-  const [originalVideo, setOriginalVideo] = useState<Video>(video); // For reverting optimistic updates
-  // For editing personal comment
-  const [personalComment, setPersonalComment] = useState<string>(currentVideo.PersonalComment || '');
+  const [currentVideo, setCurrentVideo] = useState<Video>(initialVideo);
+  const [originalVideo, setOriginalVideo] = useState<Video>(initialVideo); // For reverting optimistic updates
+  const [personalComment, setPersonalComment] = useState<string>(initialVideo.PersonalComment || '');
   const [isEditingComment, setIsEditingComment] = useState<boolean>(false);
-  // For loading/saving states
   const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [saveError, setSaveError] = useState<string | null>(null); // For displaying errors
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  useEffect(() => {
-    console.log('[VideoDetailPageContent] currentVideo state changed. Rating:', currentVideo?.ImportanceRating, 'Comment:', currentVideo?.PersonalComment);
-  }, [currentVideo]);
-  
   const [activeImportanceRating, setActiveImportanceRating] = useState<number | null>(() => {
-    const ratingValue: unknown = currentVideo.ImportanceRating; // currentVideo is 'video' prop on initial render
+    const ratingValue: unknown = initialVideo.ImportanceRating;
     let numericRating: number | null = null;
     if (typeof ratingValue === 'number') {
       numericRating = ratingValue;
@@ -277,12 +325,14 @@ export function VideoDetailPageContent({
     }
     return numericRating;
   });
-  
+
   useEffect(() => {
-    setCurrentVideo(video);
-    setOriginalVideo(video); // Initialize originalVideo
-    setPersonalComment(video.PersonalComment || '');
-    const ratingValue: unknown = video.ImportanceRating;
+    setCurrentVideo(initialVideo);
+    setOriginalVideo(initialVideo);
+    setPersonalComment(initialVideo.PersonalComment || '');
+    
+    // Logic for activeImportanceRating
+    const ratingValue: unknown = initialVideo.ImportanceRating;
     let numericRating: number | null = null;
     if (typeof ratingValue === 'number') {
       numericRating = ratingValue;
@@ -292,17 +342,20 @@ export function VideoDetailPageContent({
         numericRating = parsed;
       }
     }
-    // Safety check
     if (numericRating !== null && (numericRating < 1 || numericRating > 5)) {
-      console.warn(`[useEffect on video change] Invalid rating value ${numericRating} from prop, treating as null.`);
+      console.warn(`[useEffect initialVideo change] Invalid rating value ${numericRating} from prop, treating as null.`);
       numericRating = null;
     }
     setActiveImportanceRating(numericRating);
-    // Reset editing states when video prop changes
+
     setIsEditingComment(false);
-    setIsSaving(false);
     setSaveError(null);
-  }, [video]);
+    setIsSaving(false); // Reset saving state on video change
+  }, [initialVideo]);
+
+  
+
+
 
   const handleImportanceRatingChange = useCallback(async (newRating: number | null) => {
     if (!currentVideo?.VideoID) {
@@ -444,43 +497,8 @@ export function VideoDetailPageContent({
     }
   }, [currentVideo, personalComment, setCurrentVideo, setOriginalVideo, setIsSaving, setSaveError, setIsEditingComment]);
 
-  const detailFieldOrder: (keyof Video)[] = [
-    'ThumbHigh',
-    'URL',
-    'ActionableAdvice',
-    'TLDR',
-    'MainSummary',
-    'Description',
-    'Transcript',
-    'DetailedNarrativeFlow',
-    'MemorableQuotes',
-    'MemorableTakeaways',
-    'KeyNumbersData',
-    'KeyExamples',
-    'BookMediaRecommendations',
-    'RelatedURLs',
-    'VideoGenre',
-    'Persons',
-    'Companies',
-    
-    
-    'InvestableAssets',
-    'Ticker',
-    
-    
-    'DOIs',
-    'Hashtags',
-    'MainTopic',
-    'PrimarySources',
-    'Sentiment',
-    'SentimentReason',
-    'Channel',
-    'TechnicalTerms',
-    'Speaker',
-    
-  ];
+  // ... (rest of the code remains the same)
 
-  
   if (!currentVideo) {
     return (
       <div className="container mx-auto p-4 min-h-screen flex items-center justify-center">
@@ -489,7 +507,6 @@ export function VideoDetailPageContent({
     );
   }
 
-  
   return (
     <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
       <div className="container mx-auto max-w-5xl">
@@ -536,71 +553,57 @@ export function VideoDetailPageContent({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {}
           <div className="md:col-span-2 space-y-4">
-            {detailFieldOrder.map((fieldKey: keyof Video) => {
-              let originalValue: Video[keyof Video] = currentVideo[fieldKey];
-              const label = formatFieldName(String(fieldKey));
+            {currentVideo.ThumbHigh && (
+              <Image 
+                src={currentVideo.ThumbHigh as string} 
+                alt={`${currentVideo.Title || 'Video'} thumbnail`} 
+                width={640} 
+                height={360} 
+                className="rounded-lg shadow-lg w-full max-w-2xl aspect-video object-cover mb-4" 
+                priority 
+              />
+            )}
+            {currentVideo.URL && (
+              <div className="mb-6">
+                <a href={currentVideo.URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-lg text-blue-400 hover:text-blue-300 hover:underline">
+                  Watch on YouTube <ChevronRight size={20} className="ml-1" />
+                </a>
+              </div>
+            )}
+            <div className="grid grid-cols-1 gap-4"> 
+              {/* Dynamically ordered video details */}
+              {VIDEO_DETAIL_FIELDS_CONFIG.map(fieldConfig => {
+                const fieldValue = currentVideo[fieldConfig.key as keyof Video];
+                // Skip rendering if value is null, undefined, or an empty string/array
+                if (fieldValue === null || fieldValue === undefined) return null;
+                if (typeof fieldValue === 'string' && fieldValue.trim() === '') return null;
+                if (Array.isArray(fieldValue) && fieldValue.length === 0) return null;
+                // Additional check for empty objects, relevant to lint error 612f2a65-9ab2-46d4-8e8e-0c39cc0efb9a
+                if (fieldValue !== null && typeof fieldValue === 'object' && !Array.isArray(fieldValue) && Object.keys(fieldValue).length === 0) return null;
 
-              // 1. Handle literal empty objects
-              if (typeof originalValue === 'object' && originalValue !== null && !Array.isArray(originalValue) && Object.keys(originalValue).length === 0) {
-                originalValue = null;
-              }
-
-              // 2. Skip rendering if value is essentially empty
-              if (originalValue === null || originalValue === undefined ||
-                 (typeof originalValue === 'string' && originalValue.trim() === '') ||
-                 (Array.isArray(originalValue) && originalValue.length === 0)
-              ) {
-                return null;
-              }
-
-              // 3. Determine rendering flags based on originalValue
-              const isImg = fieldKey === 'ThumbHigh'; // Expects string URL
-              const isLnk = fieldKey === 'URL' || 
-                            (fieldKey === 'RelatedURLs' && Array.isArray(originalValue) && originalValue.every(item => typeof item === 'string' && item.startsWith('http'))); // Expects array of string URLs
-              const isArr = Array.isArray(originalValue);
-              const isMd = MARKDOWN_FIELDS.includes(String(fieldKey)) ||
-                           fieldKey === 'Description' ||
-                           fieldKey === 'Transcript' ||
-                           (typeof originalValue === 'string' && originalValue.length > 100 && !isLnk && !isImg);
-
-              let displayValue = originalValue;
-
-              // 4. Sanitize: If originalValue was an object (and not an array, and not already handled as an image/link URL string), stringify it.
-              if (typeof originalValue === 'object' && originalValue !== null && !isArr) {
-                if (!isImg && !isLnk) { 
-                  // It's a generic object not handled as a special string type (image/link URL)
-                  console.warn(`[VideoDetailPageContent] Field '${String(fieldKey)}' is an object and will be stringified. Value:`, originalValue);
-                  displayValue = JSON.stringify(originalValue, null, 2);
-                } else if (typeof originalValue !== 'string') {
-                  // It was flagged as isImg or isLnk, but originalValue is not a string (it's an object).
-                  // This indicates a data issue or an unexpected object structure for an img/link field.
-                  console.warn(`[VideoDetailPageContent] Field '${String(fieldKey)}' flagged as img/lnk but is an object. Stringifying. Value:`, originalValue);
-                  displayValue = JSON.stringify(originalValue, null, 2);
-                }
-                // If it was isImg or isLnk AND originalValue was already a string, displayValue correctly remains that string.
-              }
+                return (
+                  <DetailItem
+                    key={fieldConfig.key}
+                    label={fieldConfig.label}
+                    value={fieldValue}
+                    isMarkdown={!!fieldConfig.isMarkdown}
+                    isList={!!fieldConfig.isList}
+                    isLinkList={!!fieldConfig.isLinkList}
+                    isInitiallyCollapsed={fieldConfig.isInitiallyCollapsed === undefined ? true : fieldConfig.isInitiallyCollapsed}
+                  />
+                );
+              })}
               
-              let isInitiallyCollapsed = true;
-              const initiallyExpandedFields = ['ThumbHigh', 'URL', 'ActionableAdvice', 'TLDR', 'MainSummary', 'Description', 'Transcript'];
-              if (initiallyExpandedFields.includes(String(fieldKey))) {
-                isInitiallyCollapsed = false;
-              }
-
-              return (
-                <DetailItem
-                  key={String(fieldKey)}
-                  label={label}
-                  value={displayValue as FieldValue} // Pass the sanitized displayValue
-                  isInitiallyCollapsed={isInitiallyCollapsed}
-                  isMarkdown={isMd} // isMd is based on originalValue's nature
-                  isImage={isImg && typeof displayValue === 'string'} // Only treat as image if displayValue is a string (URL)
-                  isLink={isLnk && (typeof displayValue === 'string' || (Array.isArray(displayValue) && displayValue.every(item => typeof item === 'string')))} // Link can be string or array of strings
-                  isList={isArr && !isLnk && !isImg && !isMd} // isList also based on originalValue's nature (being an array)
-                />
-              );
-            })}
-            {}
-            {}
+              {/* Raw Data section (optional, can be kept or removed) */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="mt-6 pt-6 border-t border-neutral-700/50">
+                  <h3 className="text-xl font-semibold mb-3 text-neutral-100">Raw Data (Dev Only)</h3>
+                  <pre className="bg-neutral-800 p-3 rounded-md text-xs text-neutral-300 overflow-x-auto whitespace-pre-wrap break-all">
+                    {JSON.stringify(currentVideo, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
           </div>
 
           {}

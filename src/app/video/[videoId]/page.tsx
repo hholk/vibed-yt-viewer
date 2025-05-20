@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { fetchVideoByVideoId, fetchAllVideos } from '@/lib/nocodb';
 import { notFound } from 'next/navigation';
-import { VideoDetailPageContent } from './VideoDetailPageContent';
+import VideoDetailPageContent from './VideoDetailPageContent';
 
 interface VideoDetailPageProps {
   params: { videoId: string };
