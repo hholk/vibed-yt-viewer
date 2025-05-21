@@ -10,6 +10,7 @@
 
 import axios from 'axios';
 import { z } from 'zod';
+import { mockVideos } from './mockData';
 
 /**
  * In-memory cache for video data to prevent redundant API calls
@@ -52,16 +53,18 @@ const emptyObjectToNull = (val: unknown) => (typeof val === 'object' && val !== 
  */
 const stringToArrayOrNullPreprocessor = (val: unknown): string[] | null => {
   if (typeof val === 'string') {
-    if (val.trim() === '') return []; 
-    return val.split('\n').map(s => s.trim()).filter(s => s !== '');
+    if (val.trim() === '') return [];
+    // Split by comma, as per user requirement for fields like InvestableAssets
+    return val.split(',').map(s => s.trim()).filter(s => s !== '');
   }
   if (Array.isArray(val)) { 
-    return val as string[]; 
+    // If it's already an array, filter out non-strings or empty strings
+    return val.filter(item => typeof item === 'string').map(s => (s as string).trim()).filter(s => s !== '');
   }
   if (typeof val === 'object' && val !== null && Object.keys(val).length === 0) { 
-    return [];
+    return []; // Handle empty object as empty array
   }
-  return null; 
+  return null; // For other types or truly null/undefined, return null
 };
 
 /**
@@ -369,9 +372,27 @@ interface FetchVideosOptions<T extends z.ZodTypeAny> {
  * @returns Object containing the list of videos and pagination info
  * @throws Error if the request fails or response validation fails
  */
-export async function fetchVideos<T extends z.ZodTypeAny>(
-  options?: FetchVideosOptions<T>
+export async function fetchVideos<T extends z.ZodType = typeof videoSchema>(
+  options: FetchVideosOptions<T> = {}
 ): Promise<{ videos: z.infer<T>[]; pageInfo: PageInfo }> {
+  // Use mock data in development mode
+  if (process.env.NODE_ENV === 'development') {
+    const { page = 1, limit = 10 } = options;
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    const paginatedVideos = mockVideos.slice(start, end);
+    
+    return {
+      videos: paginatedVideos as z.infer<T>[],
+      pageInfo: {
+        totalRows: mockVideos.length,
+        page,
+        pageSize: limit,
+        isFirstPage: page === 1,
+        isLastPage: end >= mockVideos.length,
+      },
+    };
+  }
   /**
    * Get the current NocoDB URL and token from environment variables
    */
@@ -392,7 +413,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
     throw new Error('NocoDB credentials not configured. Check server environment variables.');
   }
   if (!projectId || !tableName) {
-    console.error('NocoDB Project ID (NOCODB_PROJECT_ID or NC_PROJECT_ID) or Table Name (NOCODB_TABLE_NAME) is not configured for fetchVideos.');
+    console.error('Required NocoDB environment variables (NC_URL, NC_TOKEN, NOCODB_PROJECT_ID/NC_PROJECT_ID, NOCODB_TABLE_NAME) are not set.');
     throw new Error('NocoDB project/table details not configured. Check server environment variables.');
   }
 
@@ -421,6 +442,19 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
   /**
    * Add sort order to the request parameters if specified
    */
+  const MULTI_VALUE_FIELDS_FOR_LIKE_FILTER = [
+    'InvestableAssets',
+    'Companies',
+    'Tags',
+    'Hashtags',
+    'Indicators',
+    'Trends',
+    'Persons',
+    'BookMediaRecommendations',
+    'TechnicalTerms',
+    // Add other relevant multi-value fields here if needed
+  ];
+
   if (options?.sort) {
     params.sort = options.sort;
   }
@@ -445,8 +479,25 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
               const nocoOperator = operatorKey.startsWith('_') ? operatorKey.substring(1) : operatorKey;
               
               // Basic value stringification, might need more robust escaping for complex values
-              const stringValue = (value === null || value === undefined) ? 'null' : String(value);
-              return `(${field},${nocoOperator},${stringValue})`;
+              const originalValueStr = (value === null || value === undefined) ? 'null' : String(value);
+
+              let finalOperator = nocoOperator;
+              let finalValue = originalValueStr;
+
+              // If the field is a multi-value field and the intended operation is 'eq',
+              // change it to 'like' and wrap the value with wildcards.
+              if (MULTI_VALUE_FIELDS_FOR_LIKE_FILTER.includes(field) && nocoOperator.toLowerCase() === 'eq') {
+                finalOperator = 'like';
+                // Ensure 'value' here is the raw value before it was potentially stringified as 'null'
+                finalValue = `%${String(value)}%`; 
+              } else if (nocoOperator.toLowerCase() === 'like') {
+                // If the operator is already 'like', ensure wildcards are present if not already user-provided
+                if (!String(value).includes('%')) {
+                  finalValue = `%${String(value)}%`;
+                }
+              }
+
+              return `(${field},${finalOperator},${finalValue})`;
             }
             return ''; // Condition field is not a FilterOperator object
           }).filter(Boolean).join('or'); // filter(Boolean) removes empty strings from malformed conditions. Use 'or' as per NocoDB docs.
@@ -555,7 +606,7 @@ export async function fetchVideoByVideoId(videoId: string, options?: FetchVideoB
     throw new Error('NocoDB credentials not configured. Check server environment variables.');
   }
   if (!projectId || !tableName) {
-    console.error('NocoDB Project ID (NOCODB_PROJECT_ID or NC_PROJECT_ID) or Table Name (NOCODB_TABLE_NAME) is not configured for fetchVideoByVideoId.');
+    console.error('Required NocoDB environment variables (NC_URL, NC_TOKEN, NOCODB_PROJECT_ID/NC_PROJECT_ID, NOCODB_TABLE_NAME) are not set.');
     throw new Error('NocoDB project/table details not configured. Check server environment variables.');
   }
 
@@ -621,6 +672,132 @@ export async function fetchVideoByVideoId(videoId: string, options?: FetchVideoB
   return fetchPromise;
 }
 
+// Helper Zod schema for the V2 API response structure (simplified)
+// We are interested in the 'list' which contains the records, and each record is an object.
+// The actual structure of a record will vary, so we use z.record(z.any())
+const nocoDBV2RecordSchema = z.record(z.any()); // Each record is an object with unknown keys/values
+const nocoDBV2ResponseSchema = z.object({
+  list: z.array(nocoDBV2RecordSchema),
+  pageInfo: z.object({
+    totalRows: z.number(),
+    page: z.number(),
+    pageSize: z.number(),
+    isFirstPage: z.boolean(),
+    isLastPage: z.boolean(),
+  }),
+});
+
+export async function _fetchDistinctValuesForFieldV2_SERVER_ONLY(
+  fieldName: string
+): Promise<string[]> {
+  const NC_URL = process.env.NC_URL;
+  const NC_TOKEN = process.env.NC_TOKEN;
+  const TABLE_ID = process.env.NOCODB_TABLE_ID;
+  const tableName = process.env.NOCODB_TABLE_NAME; // For error messages
+
+  if (!NC_URL || !NC_TOKEN || !TABLE_ID || !tableName) {
+    console.error(
+      'Missing NocoDB environment variables for V2 API distinct values fetch. Ensure NC_URL, NC_TOKEN, NOCODB_TABLE_ID, and NOCODB_TABLE_NAME are set.'
+    );
+    throw new Error(
+      'NocoDB V2 API environment variables are not properly configured.'
+    );
+  }
+
+  try {
+    // console.log(`Fetching distinct values for field: ${fieldName} using V2 API from table ID: ${TABLE_ID}`);
+    const allRecords: z.infer<typeof nocoDBV2RecordSchema>[] = [];
+    let currentPage = 1;
+    let isLastPage = false;
+    const pageSize = 100; // NocoDB default page size for V2 API is often 20 or 25. Using 100 for potentially faster fetch if supported.
+
+    while (!isLastPage) {
+        // console.log(`Fetching page ${currentPage} for field ${fieldName}, table ${TABLE_ID}`);
+        const response = await axios.get(
+            `${NC_URL}/api/v2/tables/${TABLE_ID}/records`,
+            {
+            headers: { 'xc-token': NC_TOKEN },
+            params: {
+                fields: fieldName, // Attempt to fetch only the required field
+                limit: pageSize,
+                offset: (currentPage - 1) * pageSize,
+            },
+            }
+        );
+
+        const parsedData = nocoDBV2ResponseSchema.safeParse(response.data);
+
+        if (!parsedData.success) {
+            console.error(
+            `Error parsing NocoDB V2 API response for field ${fieldName} (table ID: ${TABLE_ID}, page ${currentPage}):`,
+            parsedData.error.errors
+            );
+            if (response.data && response.data.list && response.data.pageInfo) {
+                console.warn("Proceeding with potentially partially parsed data due to schema mismatch while fetching distinct values.");
+                allRecords.push(...response.data.list);
+                isLastPage = response.data.pageInfo?.isLastPage ?? true;
+            } else {
+                 throw new Error(`NocoDB V2 API parsing error and no list data for field ${fieldName} (table ID: ${TABLE_ID}): ${parsedData.error.message}`);
+            }
+        } else {
+            allRecords.push(...parsedData.data.list);
+            isLastPage = parsedData.data.pageInfo.isLastPage;
+        }
+        currentPage++;
+        if (currentPage > 200) { 
+            console.warn(`Exceeded 200 pages fetch limit for distinct values from table ID ${TABLE_ID}. Breaking.`);
+            break;
+        }
+    }
+
+    const distinctValues = new Set<string>();
+
+    allRecords.forEach((record) => {
+      const value = record[fieldName];
+      if (value) {
+        if (Array.isArray(value)) {
+          value.forEach((item) => {
+            if (typeof item === 'string' && item.trim() !== '') {
+              distinctValues.add(item.trim());
+            } else if (item !== null && item !== undefined) { 
+                distinctValues.add(String(item).trim());
+            }
+          });
+        } else if (typeof value === 'string') {
+          const items = value.split(',').map((s) => s.trim());
+          items.forEach((item) => {
+            if (item !== '') {
+              distinctValues.add(item);
+            }
+          });
+        } else if (value !== null && value !== undefined) { 
+             distinctValues.add(String(value).trim());
+        }
+      }
+    });
+    // console.log(`Found distinct values for ${fieldName} from table ID ${TABLE_ID}:`, Array.from(distinctValues).sort());
+    return Array.from(distinctValues).sort();
+  } catch (error) {
+    console.error(`Error fetching distinct values for field ${fieldName} from NocoDB V2 API (Table ID: ${TABLE_ID}, Table Name: ${tableName}):`, error);
+    if (axios.isAxiosError(error) && error.response) {
+      console.error('NocoDB API V2 Error Response Status:', error.response.status);
+      console.error('NocoDB API V2 Error Response Data:', JSON.stringify(error.response.data, null, 2));
+        if (error.response.status === 404 && error.response.data?.msg?.toLowerCase().includes("table not found")) {
+            throw new Error(`NocoDB Error: Table with ID '${TABLE_ID}' not found. Please check NOCODB_TABLE_ID in your .env file.`);
+        } else if (error.response.status === 400 ) {
+             const errorMsg = typeof error.response.data?.msg === 'string' ? error.response.data.msg.toLowerCase() : "";
+             if (errorMsg.includes("fields") || errorMsg.includes("column") || errorMsg.includes(fieldName.toLowerCase())) {
+                console.warn(`NocoDB API V2 returned an error, possibly due to the 'fields=${fieldName}' parameter or field name correctness (Table ID: ${TABLE_ID}). The API might not support restricting fields this way or the field name is incorrect.`);
+                throw new Error(`NocoDB API V2 error with 'fields' parameter for field '${fieldName}' or field not found (Table ID: ${TABLE_ID}). Check API capabilities and field name.`);
+             }
+        }
+    }
+    throw new Error(
+      `Failed to fetch distinct values for '${fieldName}' from NocoDB V2 (Table ID: ${TABLE_ID}, Table Name: ${tableName}). Ensure TABLE_ID is correct, NocoDB is accessible, and the field exists.`
+    );
+  }
+}
+
 interface FetchAllVideosOptions<T extends z.ZodTypeAny> {
   /**
    * Sort order (e.g., 'Title', '-CreatedAt')
@@ -675,8 +852,12 @@ export async function fetchDistinctValues(field: string): Promise<string[]> {
     const values = await response.json();
     console.log(`[fetchDistinctValues] Received values for ${field}:`, values);
     return values;
-  } catch (error: any) {
-    console.error(`[fetchDistinctValues] Error fetching distinct values for field ${field}:`, error.message);
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(`[fetchDistinctValues] Error fetching distinct values for field ${field}:`, error.message);
+    } else {
+      console.error(`[fetchDistinctValues] An unknown error occurred while fetching distinct values for field ${field}:`, error);
+    }
     throw error;
   }
 }

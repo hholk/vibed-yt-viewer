@@ -49,15 +49,10 @@ const categoryOptions: FilterOption[] = [
   { value: 'Speaker', label: 'Speaker' },
 ];
 
-interface FilterDropdownProps {
-  onCategoryChange?: (category: string) => void;
-  onValuesChange?: (values: string[]) => void;
-}
-
-export function FilterDropdown({ onCategoryChange, onValuesChange }: FilterDropdownProps = {}) {
+export function FilterDropdown() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isClient, setIsClient] = React.useState(false);
+
   const [openCategory, setOpenCategory] = React.useState(false);
   const [selectedCategory, setSelectedCategory] = React.useState<string>('');
   const [selectedValues, setSelectedValues] = React.useState<string[]>([]);
@@ -65,7 +60,6 @@ export function FilterDropdown({ onCategoryChange, onValuesChange }: FilterDropd
   const [loadingValues, setLoadingValues] = React.useState(false);
 
   React.useEffect(() => {
-    setIsClient(true);
     const storedCategory = sessionStorage.getItem(FILTER_STORAGE_KEY);
     if (storedCategory) {
       setSelectedCategory(storedCategory);

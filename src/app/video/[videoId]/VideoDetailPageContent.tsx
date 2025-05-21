@@ -585,7 +585,7 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
                   <DetailItem
                     key={fieldConfig.key}
                     label={fieldConfig.label}
-                    value={fieldValue}
+                    value={fieldValue as FieldValue}
                     isMarkdown={!!fieldConfig.isMarkdown}
                     isList={!!fieldConfig.isList}
                     isLinkList={!!fieldConfig.isLinkList}

@@ -43,19 +43,6 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
     );
   }
 
-  if (!videos || videos.length === 0) {
-    return (
-      <div className="container mx-auto p-4">
-        <Alert>
-          <Terminal className="h-4 w-4" />
-          <AlertTitle>No Videos Found</AlertTitle>
-          <AlertDescription>
-            There are currently no videos to display. Check back later or add some via NocoDB.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
 
   return (
     <div className="container mx-auto p-4">

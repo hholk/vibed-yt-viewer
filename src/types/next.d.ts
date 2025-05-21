@@ -61,9 +61,11 @@ declare module 'next/link' {
 declare namespace NodeJS {
   interface ProcessEnv {
     NODE_ENV: 'development' | 'production' | 'test';
-    NEXT_PUBLIC_NC_URL?: string;
+    NC_URL?: string;
     NC_TOKEN?: string;
-    NEXT_PUBLIC_NOCODB_TABLE_NAME?: string;
+    NOCODB_TABLE_NAME?: string;
+    NOCODB_PROJECT_ID?: string;
+    NC_PROJECT_ID?: string;
   }
 }
 

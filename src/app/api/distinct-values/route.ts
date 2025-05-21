@@ -1,119 +1,48 @@
-import { NextRequest, NextResponse } from 'next/server';
-import axios from 'axios';
+// src/app/api/distinct-values/route.ts
+import { NextResponse } from 'next/server';
+// This will be the renamed, server-only function from nocodb.ts
+import { _fetchDistinctValuesForFieldV2_SERVER_ONLY } from '@/lib/nocodb'; 
 
-export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const field = searchParams.get('field');
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const fieldName = searchParams.get('field');
 
-  if (!field) {
-    return NextResponse.json({ error: 'Field parameter is required' }, { status: 400 });
-  }
-
-  const ncUrl = process.env.NC_URL;
-  const ncToken = process.env.NC_TOKEN;
-  const tableName = process.env.NOCODB_TABLE_NAME || 'youtubeTranscripts';
-  const projectId = process.env.NOCODB_PROJECT_ID || process.env.NC_PROJECT_ID || 'phk8vxq6f1ev08h';
-  const orgId = process.env.NOCODB_ORG_ID || 'noco';
-
-  if (!ncUrl || !ncToken) {
-    console.error('[API] NocoDB credentials not configured');
-    return NextResponse.json({ error: 'NocoDB configuration error' }, { status: 500 });
-  }
-
-  const axiosInstance = axios.create({
-    baseURL: ncUrl,
-    headers: {
-      'xc-token': ncToken,
-    },
-  });
-
-  // Try both possible endpoint patterns
-  const endpoint1 = `/api/v1/db/data/${orgId}/${projectId}/${tableName}/groupby`;
-  const endpoint2 = `/api/v1/db/data/noco/${projectId}/${tableName}/groupby`;
-
-  async function processResponse(response: any) {
-    console.log(`[API] Raw response data for ${field}:`, JSON.stringify(response.data));
-    
-    // Handle different response formats
-    let data = response.data;
-    
-    // If response.data is a string, try parsing it as JSON
-    if (typeof data === 'string') {
-      try {
-        data = JSON.parse(data);
-      } catch (e) {
-        console.log('[API] Response data is string but not JSON:', data);
-      }
-    }
-
-    // If data is not an array, check if it's an object with list/rows property
-    if (!Array.isArray(data)) {
-      if (data?.list) {
-        data = data.list;
-      } else if (data?.rows) {
-        data = data.rows;
-      } else {
-        console.error('[API] Unexpected response format:', data);
-        throw new Error('Unexpected response format');
-      }
-    }
-
-    // Extract values, handling different item formats
-    const values = data.reduce((acc: string[], item: any) => {
-      let value = item[field];
-      
-      // Handle null/undefined
-      if (value === null || value === undefined || value === '') {
-        return acc;
-      }
-
-      // Handle array values (like ["value"])
-      if (Array.isArray(value)) {
-        value = value[0];
-      }
-
-      // Handle object values (like { value: "something" })
-      if (typeof value === 'object' && value !== null) {
-        if ('value' in value) {
-          value = (value as { value: string }).value;
-        } else {
-          const objValues = Object.values(value);
-          value = objValues.length > 0 ? objValues[0] : null;
-        }
-      }
-
-      if (value !== null && value !== undefined && value !== '') {
-        acc.push(String(value));
-      }
-      return acc;
-    }, []);
-
-    console.log(`[API] Processed values for ${field}:`, values);
-    return Array.from(new Set(values));
+  if (!fieldName) {
+    return NextResponse.json({ message: 'Field name query parameter is required' }, { status: 400 });
   }
 
   try {
-    // Try first endpoint pattern
-    try {
-      const response = await axiosInstance.get(endpoint1, {
-        params: { column_name: field },
-      });
-      const values = await processResponse(response);
-      return NextResponse.json(values);
-    } catch (error1: any) {
-      console.log(`[API] First endpoint failed:`, error1.message);
-      // If first endpoint fails, try second endpoint pattern
-      const response = await axiosInstance.get(endpoint2, {
-        params: { column_name: field },
-      });
-      const values = await processResponse(response);
-      return NextResponse.json(values);
+    const distinctValues = await _fetchDistinctValuesForFieldV2_SERVER_ONLY(fieldName);
+    return NextResponse.json(distinctValues);
+  } catch (e) {
+    // Log the raw error first
+    console.error(`[API Route /api/distinct-values] Raw error for ${fieldName}:`, e);
+
+    let errorMessage = 'An unknown error occurred while fetching distinct values from NocoDB API v2.';
+    let errorDetail: string | undefined = undefined;
+    let statusCode = 500;
+
+    if (e instanceof Error) {
+      console.error(`[API Route /api/distinct-values] Error fetching distinct values for ${fieldName}:`, e.message, e.stack);
+      errorMessage = e.message; // Use the actual error message
+      errorDetail = e.message; // Keep original error message for detail
+
+      // Specific error message checks
+      if (e.message.includes("Table with ID") && e.message.includes("not found")) {
+        errorMessage = `Configuration error: The NocoDB table specified for field '${fieldName}' could not be found. Please check server configuration.`;
+      } else if (e.message.includes("NocoDB V2 API environment variables are not properly configured")) {
+        errorMessage = "Server configuration error: NocoDB environment variables are missing or incorrect.";
+      } else if (e.message.includes("NocoDB API V2 error with 'fields' parameter") || e.message.includes("field not found")) {
+        errorMessage = `The field '${fieldName}' might not exist or is not queryable for distinct values. Please check the field name or NocoDB table structure.`;
+        statusCode = 400;
+      } else if (e.message.includes("NocoDB V2 API parsing error")) {
+        errorMessage = `Error parsing data from NocoDB for field '${fieldName}'. The data structure might have changed.`;
+      }
+    } else {
+      // Handle non-Error objects thrown
+      errorDetail = String(e);
     }
-  } catch (error: any) {
-    console.error('[API] Error fetching distinct values:', error.message);
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch distinct values' },
-      { status: error.response?.status || 500 }
-    );
+    
+    return NextResponse.json({ message: errorMessage, detail: errorDetail }, { status: statusCode });
   }
 }
