@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Video, VideoListItem } from '@/lib/nocodb';
 import { handleUpdateVideoDetailsAction } from '@/lib/actions';
@@ -350,6 +350,8 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
     return numericRating;
   });
 
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => {
     setCurrentVideo(initialVideo);
     setOriginalVideo(initialVideo);
@@ -474,6 +476,42 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
     }
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentVideo, originalVideo, setCurrentVideo, setOriginalVideo, setIsSaving, setSaveError]);
+
+  const handleDeleteVideo = useCallback(async () => {
+    if (!currentVideo || !currentVideo.VideoID) {
+      alert('Video information is not available.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the video "${currentVideo.Title || currentVideo.VideoID}"? This action cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/nocodb/video/${currentVideo.VideoID}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response from server.' }));
+        throw new Error(errorData.error || `Failed to delete video. Status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      alert(result.message || 'Video deleted successfully!');
+      router.push('/'); // Redirect to homepage or video list page
+    } catch (error) {
+      console.error('Failed to delete video:', error);
+      alert(`Error deleting video: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [currentVideo, router]);
 
   const navigateToVideo = useCallback((direction: 'prev' | 'next') => {
     const currentQuery = searchParams.toString();
@@ -722,7 +760,7 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
               <button
                 onClick={handleReworkSummary}
                 className="w-full px-4 py-2.5 text-sm font-medium rounded-md bg-yellow-600 hover:bg-yellow-500 text-white transition-colors flex items-center justify-center"
-                disabled={isSaving}
+                disabled={isSaving || isDeleting} // Disable if saving or deleting
               >
                 {isSaving ? (
                   <>
@@ -734,8 +772,28 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
                   </>
                 )}
               </button>
-              <p className="text-xs text-neutral-400 mt-2">
+              <p className="text-xs text-neutral-400 mt-2 mb-3"> {/* Added mb-3 for spacing */}
                 This will clear the &apos;Detailed Narrative Flow&apos; field. This action is useful if you plan to regenerate or significantly revise this section.
+              </p>
+
+              {/* Delete Video Button */}
+              <button
+                onClick={handleDeleteVideo}
+                className="w-full px-4 py-2.5 text-sm font-medium rounded-md bg-red-700 hover:bg-red-600 text-white transition-colors flex items-center justify-center mt-3"
+                disabled={isDeleting || isSaving} // Disable if deleting or saving other things
+              >
+                {isDeleting ? (
+                  <>
+                    <ChevronDown className="animate-spin h-5 w-5 mr-2" /> Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={18} className="mr-2" /> Delete Video
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-neutral-500 mt-2">
+                This will permanently remove the video and its associated data from the system.
               </p>
             </div>
             

@@ -867,6 +867,10 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
    */
   let hasMorePages = true;
 
+  // Check if we have a single filter value - in this case we want to ensure we get at least that video
+  const hasSingleFilter = options?.filterCategory && options?.filterValues && options.filterValues.length === 1;
+  const singleFilterValue = hasSingleFilter && options?.filterValues ? options.filterValues[0] : null;
+
   const fetchOptions: Omit<FetchVideosOptions<T>, 'schema'> = {
     sort: options?.sort,
     limit: pageSize,
@@ -877,7 +881,7 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
       ? {
           _or: options.filterValues.map((value: string) => ({
             [options.filterCategory as string]: {
-              _eq: value
+              _eq: value // Using _eq as _contains is not a valid operator in the FilterOperator type
             }
           }))
         }
@@ -906,6 +910,40 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
       throw error;
     }
   }
+  // If we have a single filter and no videos were found, we need to fetch at least one video with that filter
+  if (hasSingleFilter && allItems.length === 0 && singleFilterValue && options?.filterCategory) {
+    console.log(`[fetchAllVideos] No videos found with exact match for ${options.filterCategory}=${singleFilterValue}, trying with _like operator`);
+    
+    // Try with _like operator to find at least one video with partial match
+    const exactMatchOptions: Omit<FetchVideosOptions<T>, 'schema'> = {
+      sort: options?.sort,
+      limit: 1,
+      fields: options?.fields,
+      ncProjectId: options?.ncProjectId,
+      ncTableName: options?.ncTableName,
+      where: {
+        [options.filterCategory]: {
+          _like: `%${singleFilterValue}%`
+        }
+      }
+    };
+    
+    try {
+      const schemaToUse = (options?.schema || videoSchema) as T;
+      const { videos } = await fetchVideos<T>({
+        ...exactMatchOptions,
+        schema: schemaToUse,
+        page: 1,
+        limit: 1,
+      });
+      
+      allItems.push(...videos);
+    } catch (error) {
+      console.error(`Error fetching videos with exact match:`, error);
+      // Don't throw here, we'll return the empty array
+    }
+  }
+  
   return allItems;
 }
 

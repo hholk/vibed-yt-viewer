@@ -128,7 +128,7 @@ export function FilterDropdown() {
             variant="outline"
             role="combobox"
             aria-expanded={openCategory}
-            className="w-[200px] justify-between"
+            className="w-[200px] justify-between hover:text-white"
           >
             {selectedCategory
               ? categoryOptions.find((cat) => cat.value === selectedCategory)?.label
