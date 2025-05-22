@@ -52,6 +52,15 @@ const renderBadgeList = (
   );
 };
 
+const processMarkdownListString = (markdownString: string | null | undefined): string[] | null => {
+  if (!markdownString) return null;
+  return markdownString
+    .split('\n') // Split by newline
+    .map(line => line.trim())
+    .filter(line => line) // Remove empty lines after trimming
+    .map(line => line.replace(/^[-*]\s*/, '')); // Remove common markdown list item prefixes like '- ' or '* '
+};
+
 const renderDetailItem = (label: string, value: React.ReactNode | string | number | null | undefined, className?: string) => {
   if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
   return (
@@ -192,8 +201,8 @@ export default function VideoDetailClientView({ video, allVideos, currentSort }:
         {renderDetailItem("Main Summary", video.MainSummary)}
         {renderDetailItem("Detailed Narrative Flow", video.DetailedNarrativeFlow)}
 
-        {renderStringList(video.MemorableQuotes, "Memorable Quotes")}
-        {renderStringList(video.MemorableTakeaways, "Memorable Takeaways")}
+        {renderStringList(processMarkdownListString(video.MemorableQuotes), "Memorable Quotes")}
+        {renderStringList(processMarkdownListString(video.MemorableTakeaways), "Memorable Takeaways")}
         
         {renderDetailItem("Key Numbers & Data", video.KeyNumbersData)}
         {renderDetailItem("Key Examples", video.KeyExamples)}

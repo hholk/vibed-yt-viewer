@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,12 +13,13 @@ interface VideoCardProps {
 }
 
 export function VideoCard({ video, priority = false }: VideoCardProps) {
+  const searchParams = useSearchParams();
   
   const thumbnailUrl = video.ThumbHigh && typeof video.ThumbHigh === 'string' ? video.ThumbHigh : null;
 
   return (
     
-    <Link href={`/video/${video.VideoID}`} passHref className="block hover:shadow-lg transition-shadow duration-200 rounded-lg h-full">
+    <Link href={`/video/${video.VideoID}${searchParams ? `?${searchParams.toString()}` : ''}`} passHref className="block hover:shadow-lg transition-shadow duration-200 rounded-lg h-full">
       <Card className="w-full flex flex-col h-full bg-card text-card-foreground p-0">
         <CardHeader className="p-0 rounded-t-lg overflow-hidden">
           {thumbnailUrl ? (

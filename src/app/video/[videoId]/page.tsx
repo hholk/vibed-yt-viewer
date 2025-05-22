@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { fetchVideoByVideoId, fetchAllVideos } from '@/lib/nocodb';
+import { fetchVideoByVideoId, fetchAllVideos, videoListItemSchema } from '@/lib/nocodb';
 import { notFound } from 'next/navigation';
 import VideoDetailPageContent from './VideoDetailPageContent';
 
@@ -39,11 +39,24 @@ export default async function VideoDetailPage({ params, searchParams }: VideoDet
   const sortParam = searchParams?.sort;
   const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt';
 
+  const filterCategoryParam = searchParams?.filterCategory;
+  const currentFilterCategory = typeof filterCategoryParam === 'string' ? filterCategoryParam : undefined;
+
+  const filterValuesParam = searchParams?.filterValues;
+  const currentFilterValues = typeof filterValuesParam === 'string' 
+    ? filterValuesParam.split(',').map(fv => fv.trim()).filter(fv => fv) 
+    : (Array.isArray(filterValuesParam) 
+      ? filterValuesParam.map(fv => String(fv).trim()).filter(fv => fv) 
+      : undefined);
+
   // Then fetch the list that depends on the sort order
   // Note: 'video' will be defined here due to the notFound() check above.
   const allVideoListItems = await fetchAllVideos({
     sort: currentSort,
-    fields: ['Id', 'VideoID', 'Title'], // Kept fields consistent with original
+    fields: ['Id', 'VideoID', 'Title'], // Sufficient for next/prev items
+    schema: videoListItemSchema, // Use lightweight schema for efficiency
+    filterCategory: currentFilterCategory,
+    filterValues: currentFilterValues && currentFilterValues.length > 0 ? currentFilterValues : undefined,
   });
 
   // The if (!video) check was here, but it's now redundant as it's performed earlier.
