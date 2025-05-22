@@ -10,7 +10,7 @@
 
 import axios from 'axios';
 import { z } from 'zod';
-import { mockVideos } from './mockData';
+
 
 /**
  * In-memory cache for video data to prevent redundant API calls
@@ -375,24 +375,6 @@ interface FetchVideosOptions<T extends z.ZodTypeAny> {
 export async function fetchVideos<T extends z.ZodType = typeof videoSchema>(
   options: FetchVideosOptions<T> = {}
 ): Promise<{ videos: z.infer<T>[]; pageInfo: PageInfo }> {
-  // Use mock data in development mode
-  if (process.env.NODE_ENV === 'development') {
-    const { page = 1, limit = 10 } = options;
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    const paginatedVideos = mockVideos.slice(start, end);
-    
-    return {
-      videos: paginatedVideos as z.infer<T>[],
-      pageInfo: {
-        totalRows: mockVideos.length,
-        page,
-        pageSize: limit,
-        isFirstPage: page === 1,
-        isLastPage: end >= mockVideos.length,
-      },
-    };
-  }
   /**
    * Get the current NocoDB URL and token from environment variables
    */
