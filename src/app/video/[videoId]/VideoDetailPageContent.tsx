@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Trash2 } from 'lucide-react';
+import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Trash2, Copy, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Video, VideoListItem } from '@/lib/nocodb';
 import { handleUpdateVideoDetailsAction } from '@/lib/actions';
@@ -118,6 +118,8 @@ const DetailItem = React.memo<DetailItemProps>(({
     return stored !== null ? stored === 'true' : (isInitiallyCollapsed ?? true);
   });
 
+  const [isCopied, setIsCopied] = useState(false);
+
   const toggleCollapse = useCallback(() => {
     setIsCollapsed((prev: boolean) => {
       const newState = !prev;
@@ -125,6 +127,27 @@ const DetailItem = React.memo<DetailItemProps>(({
       return newState;
     });
   }, [storageKey]);
+
+  const handleKeyDownForToggle = useCallback((event: React.KeyboardEvent) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggleCollapse();
+    }
+  }, [toggleCollapse]);
+
+  const handleCopy = useCallback(async (event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent toggleCollapse from firing
+    if (isMarkdown && typeof value === 'string' && value.trim() !== '') {
+      try {
+        await navigator.clipboard.writeText(value);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000); // Revert icon after 2 seconds
+      } catch (err) {
+        console.error('Failed to copy text: ', err);
+        // Optionally, provide user feedback about the error
+      }
+    }
+  }, [value, isMarkdown]);
 
   const isEmpty = value === null || value === undefined || 
                 (Array.isArray(value) && value.length === 0) || 
@@ -291,22 +314,41 @@ const DetailItem = React.memo<DetailItemProps>(({
 
   return (
     <div className="mb-3 last:mb-0 bg-neutral-800/50 p-3 rounded-lg shadow-sm">
-      <button 
+      <div 
+        role="button"
+        tabIndex={0}
         onClick={toggleCollapse}
-        className="w-full flex justify-between items-center cursor-pointer list-none p-0 bg-transparent border-none"
+        onKeyDown={handleKeyDownForToggle}
+        className="w-full flex justify-between items-center cursor-pointer list-none p-0 bg-transparent border-none select-none"
         aria-expanded={!isCollapsed}
       >
         <span className="text-xs font-medium text-neutral-400 hover:text-neutral-300 transition-colors">
           {formatFieldName(label)}
         </span>
-        <div className="text-neutral-500 hover:text-neutral-300 transition-colors">
-          {isCollapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
+        <div className="flex items-center"> 
+          {isMarkdown && typeof value === 'string' && value.trim() !== '' && (
+            <button
+              onClick={handleCopy} // handleCopy already calls event.stopPropagation()
+              className="p-1 mr-1 rounded hover:bg-neutral-700 focus:outline-none focus:ring-1 focus:ring-neutral-500"
+              aria-label="Copy content"
+              title={isCopied ? "Copied!" : "Copy as Markdown"}
+            >
+              {isCopied ? (
+                <Check className="h-4 w-4 text-green-500" />
+              ) : (
+                <Copy className="h-4 w-4 text-neutral-400 hover:text-neutral-300" />
+              )}
+            </button>
           )}
+          <div className="text-neutral-500 hover:text-neutral-300 transition-colors">
+            {isCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </div>
         </div>
-      </button>
+      </div>
       {!isCollapsed && (
         <div className="mt-2 pl-1 text-neutral-100">
           {renderValue()}
