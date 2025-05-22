@@ -1,0 +1,369 @@
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
+import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Trash2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import type { Video, VideoListItem } from '@/lib/nocodb';
+import { handleUpdateVideoDetailsAction, handleDeleteVideoAction } from '@/lib/actions';
+import type { VideoUpdatePayload } from '@/lib/video-service';
+import { StarRating } from '@/components/StarRating';
+
+export type { Video, VideoListItem } from '@/lib/nocodb';
+
+type SafeReactMarkdownProps = {
+  children: string;
+};
+const SafeReactMarkdown = ({ children }: SafeReactMarkdownProps) => {
+  return <ReactMarkdown>{children}</ReactMarkdown>;
+};
+
+type FieldValue = string | number | boolean | Date | string[] | Record<string, unknown> | Record<string, unknown>[] | PotentialLinkedItem | PotentialLinkedItem[] | null | undefined;
+
+type PotentialLinkedItem = {
+  Id: string | number;
+  Title?: string;
+  name?: string;
+  url?: string; // For attachments like ThumbHigh
+  // Allow other properties as NocoDB linked records can vary
+  [key: string]: unknown; 
+};
+
+interface VideoDetailPageContentProps {
+  video: Video;
+  allVideos: VideoListItem[]; 
+  previousVideo?: { Id: string; Title: string | null } | null;
+  nextVideo?: { Id: string; Title: string | null } | null;
+}
+
+const formatFieldName = (fieldName: string): string => {
+  return fieldName
+    .replace(/([A-Z])/g, ' $1') 
+    .replace(/_/g, ' ')        
+    .trim()
+    .replace(/^\w/, (c) => c.toUpperCase()); 
+};
+
+const VIDEO_DETAIL_FIELDS_CONFIG = [
+  // ThumbHigh and URL are handled separately before the main loop
+  
+  // Main content fields - reordered as per requirement
+  { key: 'MainTopic', label: 'Main Topic', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'TLDR', label: 'TLDR', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'ActionableAdvice', label: 'Actionable Advice', isMarkdown: true, isInitiallyCollapsed: false },
+  
+  // Other markdown fields (with styling)
+  { key: 'MainSummary', label: 'Main Summary', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'DetailedNarrativeFlow', label: 'Detailed Narrative Flow', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'MemorableQuotes', label: 'Memorable Quotes', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'MemorableTakeaways', label: 'Memorable Takeaways', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'KeyExamples', label: 'Key Examples', isMarkdown: true, isInitiallyCollapsed: false },
+  
+  // List fields
+  { key: 'VideoGenre', label: 'Video Genre', isList: true, isInitiallyCollapsed: false },
+  { key: 'Persons', label: 'Persons', isList: true, isInitiallyCollapsed: false },
+  { key: 'Companies', label: 'Companies', isList: true, isInitiallyCollapsed: false },
+  { key: 'Trends', label: 'Trends', isList: true, isInitiallyCollapsed: false },
+  { key: 'Institutions', label: 'Institutions', isList: true, isInitiallyCollapsed: false },
+  { key: 'KeyNumbersData', label: 'Key Numbers', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'BookMediaRecommendations', label: 'Book/Media Recommendations', isList: true, isInitiallyCollapsed: true },
+  { key: 'ExternalURLs', label: 'External URLs', isList: true, isLinkList: true, isInitiallyCollapsed: true },
+  { key: 'Indicators', label: 'Indicators', isList: true, isInitiallyCollapsed: true },
+  { key: 'InvestableAssets', label: 'Investable Assets', isList: true, isInitiallyCollapsed: true },
+  { key: 'TickerSymbol', label: '$Ticker', isInitiallyCollapsed: true },
+  { key: 'EventsFairs', label: 'Events/Fairs', isList: true, isInitiallyCollapsed: true },
+  { key: 'DOIs', label: 'DOIs', isList: true, isInitiallyCollapsed: true },
+  { key: 'Tags', label: 'Hashtags', isList: true, isInitiallyCollapsed: true },
+  { key: 'PrimarySources', label: 'Primary Sources', isList: true, isInitiallyCollapsed: true },
+  { key: 'Sentiment', label: 'Sentiment Score', isInitiallyCollapsed: true },
+  { key: 'SentimentReason', label: 'Sentiment Reason', isMarkdown: true, isInitiallyCollapsed: true },
+  { key: 'Channel', label: 'Channel', isInitiallyCollapsed: true },
+  { key: 'Description', label: 'Video Description (from YouTube)', isMarkdown: true, isInitiallyCollapsed: true },
+  { key: 'TechnicalTerms', label: 'Technical Terms', isList: true, isInitiallyCollapsed: true },
+  { key: 'Speaker', label: 'Speaker', isInitiallyCollapsed: true },
+  { key: 'Transcript', label: 'Transcript', isMarkdown: true, isInitiallyCollapsed: false }
+];
+
+interface DetailItemProps {
+  label: string;
+  value: FieldValue;
+  isLink?: boolean;
+  isImage?: boolean;
+  isList?: boolean;
+  isMarkdown?: boolean;
+  isInitiallyCollapsed?: boolean;
+  isLinkList?: boolean; // Added for lists where each item is a link
+}
+
+const DetailItem = React.memo<DetailItemProps>(({ 
+  label, 
+  value, 
+  isLink = false, 
+  isImage = false, 
+  isList = false, 
+  isMarkdown = false, 
+  isInitiallyCollapsed,
+  isLinkList = false
+}) => {
+  // Create a unique key for this detail section
+  const storageKey = `detail-${label.toLowerCase().replace(/\s+/g, '-')}-collapsed`;
+  
+  // Initialize state from session storage or prop
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return isInitiallyCollapsed ?? true;
+    const stored = sessionStorage.getItem(storageKey);
+    return stored !== null ? stored === 'true' : (isInitiallyCollapsed ?? true);
+  });
+
+  const toggleCollapse = useCallback(() => {
+    setIsCollapsed((prev: boolean) => {
+      const newState = !prev;
+      sessionStorage.setItem(storageKey, String(newState));
+      return newState;
+    });
+  }, [storageKey]);
+
+  const isEmpty = value === null || value === undefined || 
+                (Array.isArray(value) && value.length === 0) || 
+                (typeof value === 'string' && value.trim() === '');
+
+  const renderValue = () => {
+    if (isEmpty) {
+      return <span className="text-sm text-neutral-500 italic">N/A</span>;
+    }
+    
+    // Handle markdown content (string only)
+    if (isMarkdown && typeof value === 'string') {
+      return (
+        <div className="prose prose-invert prose-neutral prose-sm max-w-none markdown-box">
+          <SafeReactMarkdown>{value}</SafeReactMarkdown>
+        </div>
+      );
+    }
+    
+    // Handle list content (array of strings or objects)
+    if (isList && Array.isArray(value)) {
+      return (
+        <div className="space-y-1">
+          {value.map((item, index) => {
+            const itemValue = item && typeof item === 'object' && 'Title' in item 
+              ? (item as { Title: string }).Title 
+              : String(item);
+            return (
+              <div key={index} className="flex items-start">
+                <span className="mr-2">•</span>
+                <span>{itemValue}</span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    if (isImage && typeof value === 'string' && value) {
+      
+      return <Image src={value as string} alt={label} width={320} height={192} className="max-w-xs max-h-48 object-contain rounded-md my-2" />;
+    }
+
+    if (isLink && typeof value === 'string' && value) {
+      return <a href={value} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline truncate block max-w-full">{value}</a>;
+    }
+
+    if (isLinkList && Array.isArray(value)) {
+      return (
+        <ul className="list-disc list-inside space-y-1">
+          {value.map((item, index) => {
+            if (typeof item === 'string' && item.startsWith('http')) {
+              return <li key={index}><a href={item} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">{item}</a></li>;
+            } else if (typeof item === 'object' && item !== null) {
+              const linkedItem = item as PotentialLinkedItem;
+              // Handle NocoDB attachment objects (like ThumbHigh, which could be in a list)
+              if (linkedItem.url && typeof linkedItem.url === 'string' && linkedItem.url.startsWith('http')) {
+                return <li key={`linked-${linkedItem.Id || index}-url`}><a href={linkedItem.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">{linkedItem.Title || linkedItem.name || linkedItem.url}</a></li>;
+              }
+              // Handle regular linked records that might have a URL in Title or name
+              const linkCandidate = linkedItem.Title || linkedItem.name;
+              if (typeof linkCandidate === 'string' && linkCandidate.startsWith('http')) {
+                 return <li key={`linked-${linkedItem.Id || index}-cand`}><a href={linkCandidate} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">{linkCandidate}</a></li>;
+              }
+              // If linked item is not a direct URL, display its Title/name or ID
+              return <li key={`linked-${linkedItem.Id || index}-obj`} className="text-neutral-300">{linkedItem.Title || linkedItem.name || `Linked Item: ${linkedItem.Id}`}</li>;
+            }
+            // Fallback for non-URL strings or other primitive types in the array
+            return <li key={`primitive-${index}`} className="text-neutral-300">{String(item)}</li>;
+          })}
+        </ul>
+      );
+    }
+
+    if (value instanceof Date || (typeof value === 'string' && !isNaN(Date.parse(value)))) {
+      
+      const date = new Date(value);
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+    }
+
+    if (isList && Array.isArray(value)) {
+      return (
+        <ul className="list-disc pl-5 space-y-1">
+          {value.map((item, index) => {
+            const itemValue = item && typeof item === 'object' && 'Title' in item 
+              ? (item as { Title: string }).Title 
+              : String(item);
+              
+            return (
+              <li key={index} className={isLink ? 'text-blue-600 hover:underline' : ''}>
+                {isLink ? (
+                  <a href={itemValue} target="_blank" rel="noopener noreferrer">
+                    {itemValue}
+                  </a>
+                ) : (
+                  itemValue
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      );
+    }
+
+    if (typeof value === 'object' && value !== null) {
+      
+      if (label === 'Transcript' && value) {
+        
+        const transcriptText = typeof value === 'string' ? value : 
+                             (value && typeof value === 'object' && 'toString' in value) ? 
+                             value.toString() : 
+                             '';
+        
+        if (!transcriptText) return null;
+            
+        return (
+          <div key="transcript" className="space-y-3 mt-2 max-h-96 overflow-y-auto p-4 border rounded bg-gray-50 dark:bg-gray-800">
+            <h3 className="text-lg font-semibold mb-2">Transcript</h3>
+            <div className="space-y-3">
+              {transcriptText.split('\n\n').filter(Boolean).map((block: string, index: number) => {
+                const [firstLine, ...rest] = block.split('\n');
+                const timeMatch = firstLine?.match(/\d{2}:\d{2}:\d{2},\d{3}/);
+                const text = rest.join(' ').trim();
+                
+                if (!text) return null;
+                
+                return (
+                  <div key={index} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                    {timeMatch && (
+                      <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
+                        {timeMatch[0]}
+                      </span>
+                    )}
+                    {text && (
+                      <p className="mt-1 text-gray-800 dark:text-gray-200">
+                        {text}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+      return <pre className="text-sm whitespace-pre-wrap break-all">{JSON.stringify(value, null, 2)}</pre>;
+    }
+
+    return <span className="text-sm break-words">{String(value)}</span>;
+  };
+
+  
+  if (isEmpty) {
+    return null;
+  }
+
+  return (
+    <div className="mb-3 last:mb-0 bg-neutral-800/50 p-3 rounded-lg shadow-sm">
+      <button 
+        onClick={toggleCollapse}
+        className="w-full flex justify-between items-center cursor-pointer list-none p-0 bg-transparent border-none"
+        aria-expanded={!isCollapsed}
+      >
+        <span className="text-xs font-medium text-neutral-400 hover:text-neutral-300 transition-colors">
+          {formatFieldName(label)}
+        </span>
+        <div className="text-neutral-500 hover:text-neutral-300 transition-colors">
+          {isCollapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+        </div>
+      </button>
+      {!isCollapsed && (
+        <div className="mt-2 pl-1 text-neutral-100">
+          {renderValue()}
+        </div>
+      )}
+    </div>
+  );
+});
+
+DetailItem.displayName = 'DetailItem';
+
+const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
+  video: initialVideo, 
+  previousVideo,
+  nextVideo,
+}: VideoDetailPageContentProps) => {
+  const router = useRouter();
+  const handleDeleteVideo = useCallback(async () => {
+    if (!currentVideo?.VideoID) {
+      alert('Error: VideoID is missing. Cannot delete video.');
+      return;
+    }
+    
+    // Show confirmation dialog
+    const confirmed = window.confirm(`Are you sure you want to delete this video? This action cannot be undone.\n\nVideo: ${currentVideo.Title}`);
+    if (!confirmed) return;
+    
+    setIsDeleting(true);
+    setSaveError(null);
+    try {
+      const videoIdStr = String(currentVideo.VideoID);
+      const success = await handleDeleteVideoAction(videoIdStr);
+      
+      if (success) {
+        // Redirect to home page after successful deletion
+        router.push('/');
+      } else {
+        console.error('Failed to delete video: Server action returned false or deletion was not successful.');
+        alert('Failed to delete video. Please try again.');
+        setIsDeleting(false);
+      }
+    } catch (error) {
+      console.error('Failed to delete video:', error);
+      alert(`Error deleting video: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsDeleting(false);
+    }
+  }, [currentVideo, router, setIsDeleting, setSaveError]);
+
+// ... (rest of the code remains the same)
+                {currentVideo.UpdatedAt && <p>Last Updated: {new Date(currentVideo.UpdatedAt).toLocaleString()}</p>}
+                {currentVideo.PublishedAt && <p>Published: {new Date(currentVideo.PublishedAt).toLocaleString()}</p>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default VideoDetailPageContent;
+

@@ -60,6 +60,7 @@ const VIDEO_DETAIL_FIELDS_CONFIG = [
   { key: 'MemorableQuotes', label: 'Memorable Quotes', isMarkdown: true, isInitiallyCollapsed: false },
   { key: 'MemorableTakeaways', label: 'Memorable Takeaways', isMarkdown: true, isInitiallyCollapsed: false },
   { key: 'KeyExamples', label: 'Key Examples', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'KeyNumbersData', label: 'Key Numbers', isMarkdown: true, isInitiallyCollapsed: false },
   
   // List fields
   { key: 'VideoGenre', label: 'Video Genre', isList: true, isInitiallyCollapsed: false },
@@ -67,7 +68,7 @@ const VIDEO_DETAIL_FIELDS_CONFIG = [
   { key: 'Companies', label: 'Companies', isList: true, isInitiallyCollapsed: false },
   { key: 'Trends', label: 'Trends', isList: true, isInitiallyCollapsed: false },
   { key: 'Institutions', label: 'Institutions', isList: true, isInitiallyCollapsed: false },
-  { key: 'KeyNumbersData', label: 'Key Numbers', isMarkdown: true, isInitiallyCollapsed: false },
+
   { key: 'BookMediaRecommendations', label: 'Book/Media Recommendations', isList: true, isInitiallyCollapsed: true },
   { key: 'ExternalURLs', label: 'External URLs', isList: true, isLinkList: true, isInitiallyCollapsed: true },
   { key: 'Indicators', label: 'Indicators', isList: true, isInitiallyCollapsed: true },
@@ -586,7 +587,7 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
 
   return (
     <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
-      <div className="container mx-auto max-w-5xl">
+      <div className="container mx-auto max-w-4xl">
         {}
         <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
           <Link href={`/?sort=${searchParams.get('sort') || '-CreatedAt'}`} className="flex items-center text-blue-400 hover:text-blue-300 transition-colors group">
@@ -627,9 +628,9 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
         )}
 
         {} 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
           {}
-          <div className="md:col-span-2 space-y-4">
+          <div className="md:col-span-3 space-y-4">
             {currentVideo.ThumbHigh && (
               <Image 
                 src={currentVideo.ThumbHigh as string} 
@@ -700,7 +701,7 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
           </div>
 
           {}
-          <div className="md:col-span-1 space-y-6">
+          <div className="md:col-span-2 space-y-6">
             {}
             <div className="p-4 bg-neutral-800 rounded-lg shadow">
               <h3 className="text-lg font-semibold mb-2 text-neutral-300">Importance Rating</h3>
