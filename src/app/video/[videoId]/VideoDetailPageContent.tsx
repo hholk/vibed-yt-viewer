@@ -111,19 +111,27 @@ const DetailItem = React.memo<DetailItemProps>(({
   // Create a unique key for this detail section
   const storageKey = `detail-${label.toLowerCase().replace(/\s+/g, '-')}-collapsed`;
   
-  // Initialize state from session storage or prop
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return isInitiallyCollapsed ?? true;
-    const stored = sessionStorage.getItem(storageKey);
-    return stored !== null ? stored === 'true' : (isInitiallyCollapsed ?? true);
-  });
+  // Initialize with the default collapsed state (same on server and client)
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(isInitiallyCollapsed ?? true);
+  
+  // Sync with session storage on mount and when isCollapsed changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem(storageKey);
+      if (stored !== null) {
+        setIsCollapsed(stored === 'true');
+      }
+    }
+  }, [storageKey]);
 
   const [isCopied, setIsCopied] = useState(false);
 
   const toggleCollapse = useCallback(() => {
-    setIsCollapsed((prev: boolean) => {
+    setIsCollapsed(prev => {
       const newState = !prev;
-      sessionStorage.setItem(storageKey, String(newState));
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(storageKey, String(newState));
+      }
       return newState;
     });
   }, [storageKey]);
@@ -368,6 +376,7 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [currentVideo, setCurrentVideo] = useState<Video>(initialVideo);
+  const scrollStep = 100; // Pixels to scroll on each arrow key press
   const [originalVideo, setOriginalVideo] = useState<Video>(initialVideo); // For reverting optimistic updates
   const [personalComment, setPersonalComment] = useState<string>(initialVideo.PersonalComment || '');
   const [isEditingComment, setIsEditingComment] = useState<boolean>(false);
@@ -409,6 +418,64 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
   
   const [isReworkSummaryCollapsed, setIsReworkSummaryCollapsed] = useState<boolean>(true);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const navigateToVideo = useCallback((direction: 'prev' | 'next') => {
+    const currentQuery = searchParams.toString();
+    const queryString = currentQuery ? `?${currentQuery}` : '';
+
+    let targetVideoId: string | undefined;
+    if (direction === 'prev' && previousVideo?.Id) {
+      targetVideoId = previousVideo.Id;
+    } else if (direction === 'next' && nextVideo?.Id) {
+      targetVideoId = nextVideo.Id;
+    }
+
+    if (targetVideoId) {
+      router.push(`/video/${targetVideoId}${queryString}`);
+    }
+  }, [previousVideo, nextVideo, router, searchParams]);
+
+  // Handle keyboard navigation
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    // Don't trigger navigation if user is interacting with form elements
+    const target = event.target as HTMLElement;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) {
+      return;
+    }
+
+    switch (event.key) {
+      case 'ArrowLeft':
+        if (previousVideo?.Id) {
+          event.preventDefault();
+          navigateToVideo('prev');
+        }
+        break;
+      case 'ArrowRight':
+        if (nextVideo?.Id) {
+          event.preventDefault();
+          navigateToVideo('next');
+        }
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        window.scrollBy({ top: -scrollStep, behavior: 'smooth' });
+        break;
+      case 'ArrowDown':
+        event.preventDefault();
+        window.scrollBy({ top: scrollStep, behavior: 'smooth' });
+        break;
+      default:
+        break;
+    }
+  }, [navigateToVideo, nextVideo?.Id, previousVideo?.Id, scrollStep]);
+
+  // Set up and clean up keyboard event listeners
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
 
   useEffect(() => {
     setCurrentVideo(initialVideo);
@@ -570,22 +637,6 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
       setIsDeleting(false);
     }
   }, [currentVideo, router]);
-
-  const navigateToVideo = useCallback((direction: 'prev' | 'next') => {
-    const currentQuery = searchParams.toString();
-    const queryString = currentQuery ? `?${currentQuery}` : '';
-
-    let targetVideoId: string | undefined;
-    if (direction === 'prev' && previousVideo?.Id) {
-      targetVideoId = previousVideo.Id;
-    } else if (direction === 'next' && nextVideo?.Id) {
-      targetVideoId = nextVideo.Id;
-    }
-
-    if (targetVideoId) {
-      router.push(`/video/${targetVideoId}${queryString}`);
-    }
-  }, [previousVideo, nextVideo, router, searchParams]);
 
   const handleSaveComment = useCallback(async () => {
     if (!currentVideo?.VideoID) {
