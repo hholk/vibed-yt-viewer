@@ -332,24 +332,39 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [activeImportanceRating, setActiveImportanceRating] = useState<number | null>(() => {
-    const ratingValue: unknown = initialVideo.ImportanceRating;
-    let numericRating: number | null = null;
-    if (typeof ratingValue === 'number') {
-      numericRating = ratingValue;
-    } else if (typeof ratingValue === 'string' && ratingValue.trim() !== '') {
-      const parsed = parseInt(ratingValue, 10);
-      if (!isNaN(parsed)) {
-        numericRating = parsed;
+    const ratingValue = initialVideo.ImportanceRating;
+    
+    // Handle null/undefined cases
+    if (ratingValue === null || ratingValue === undefined) {
+      return null;
+    }
+    
+    // If it's already a number between 1-5, use it
+    if (typeof ratingValue === 'number' && ratingValue >= 1 && ratingValue <= 5) {
+      return ratingValue;
+    }
+    
+    // If it's a string, try to parse it
+    if (typeof ratingValue === 'string') {
+      // Type guard to ensure we can call trim()
+      const strValue = String(ratingValue);
+      const trimmed = strValue.trim();
+      if (trimmed === '') {
+        return null;
+      }
+      
+      const parsed = parseInt(trimmed, 10);
+      if (!isNaN(parsed) && parsed >= 1 && parsed <= 5) {
+        return parsed;
       }
     }
-    // Safety check for initial load
-    if (numericRating !== null && (numericRating < 1 || numericRating > 5)) {
-      console.warn(`[useState activeImportanceRating init] Invalid rating value ${numericRating}, treating as null.`);
-      numericRating = null;
-    }
-    return numericRating;
+    
+    // If we get here, the value is invalid
+    console.warn(`[useState activeImportanceRating init] Invalid rating value ${JSON.stringify(ratingValue)}, treating as null.`);
+    return null;
   });
-
+  
+  const [isReworkSummaryCollapsed, setIsReworkSummaryCollapsed] = useState<boolean>(true);
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
@@ -754,47 +769,71 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
               )}
             </div>
 
-            {/* Rework Summary Action Card */}
-            <div className="p-4 bg-neutral-800 rounded-lg shadow">
-              <h3 className="text-lg font-semibold mb-3 text-neutral-300">Rework Summary</h3>
-              <button
-                onClick={handleReworkSummary}
-                className="w-full px-4 py-2.5 text-sm font-medium rounded-md bg-yellow-600 hover:bg-yellow-500 text-white transition-colors flex items-center justify-center"
-                disabled={isSaving || isDeleting} // Disable if saving or deleting
+            {/* Video Actions Card */}
+            <div className="bg-neutral-800/50 rounded-lg shadow-sm mb-3">
+              <button 
+                onClick={() => setIsReworkSummaryCollapsed(!isReworkSummaryCollapsed)}
+                className="w-full flex justify-between items-center cursor-pointer p-4"
+                aria-expanded={!isReworkSummaryCollapsed}
               >
-                {isSaving ? (
-                  <>
-                    <ChevronDown className="animate-spin h-5 w-5 mr-2" /> Processing...
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle size={18} className="mr-2" /> Mark as Reworked (Clear Narrative)
-                  </>
-                )}
+                <h3 className="text-lg font-semibold text-neutral-300">Video Actions</h3>
+                <div className="text-neutral-500 hover:text-neutral-300 transition-colors">
+                  {isReworkSummaryCollapsed ? (
+                    <ChevronRight className="h-5 w-5" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5" />
+                  )}
+                </div>
               </button>
-              <p className="text-xs text-neutral-400 mt-2 mb-3"> {/* Added mb-3 for spacing */}
-                This will clear the &apos;Detailed Narrative Flow&apos; field. This action is useful if you plan to regenerate or significantly revise this section.
-              </p>
+              {!isReworkSummaryCollapsed && (
+                <div className="px-4 pb-4 pt-0 space-y-4">
+                  {/* Rework Summary Action */}
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-neutral-300">Rework Summary</h4>
+                    <button
+                      onClick={handleReworkSummary}
+                      className="w-full px-4 py-2 text-sm font-medium rounded-md bg-yellow-600 hover:bg-yellow-500 text-white transition-colors flex items-center justify-center"
+                      disabled={isSaving || isDeleting}
+                    >
+                      {isSaving ? (
+                        <>
+                          <ChevronDown className="animate-spin h-4 w-4 mr-2" /> Processing...
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle size={16} className="mr-2" /> Mark as Reworked (Clear Narrative)
+                        </>
+                      )}
+                    </button>
+                    <p className="text-xs text-neutral-400">
+                      This will clear the &apos;Detailed Narrative Flow&apos; field. This action is useful if you plan to regenerate or significantly revise this section.
+                    </p>
+                  </div>
 
-              {/* Delete Video Button */}
-              <button
-                onClick={handleDeleteVideo}
-                className="w-full px-4 py-2.5 text-sm font-medium rounded-md bg-red-700 hover:bg-red-600 text-white transition-colors flex items-center justify-center mt-3"
-                disabled={isDeleting || isSaving} // Disable if deleting or saving other things
-              >
-                {isDeleting ? (
-                  <>
-                    <ChevronDown className="animate-spin h-5 w-5 mr-2" /> Deleting...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 size={18} className="mr-2" /> Delete Video
-                  </>
-                )}
-              </button>
-              <p className="text-xs text-neutral-500 mt-2">
-                This will permanently remove the video and its associated data from the system.
-              </p>
+                  {/* Delete Video Action */}
+                  <div className="space-y-2 pt-2 border-t border-neutral-700">
+                    <h4 className="text-sm font-medium text-neutral-300">Danger Zone</h4>
+                    <button
+                      onClick={handleDeleteVideo}
+                      className="w-full px-4 py-2 text-sm font-medium rounded-md bg-red-700 hover:bg-red-600 text-white transition-colors flex items-center justify-center"
+                      disabled={isDeleting || isSaving}
+                    >
+                      {isDeleting ? (
+                        <>
+                          <ChevronDown className="animate-spin h-4 w-4 mr-2" /> Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 size={16} className="mr-2" /> Delete Video
+                        </>
+                      )}
+                    </button>
+                    <p className="text-xs text-neutral-400">
+                      This will permanently remove the video and its associated data from the system.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Metadata Box */}
