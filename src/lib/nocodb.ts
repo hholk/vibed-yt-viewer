@@ -170,8 +170,8 @@ export const videoSchema = z.object({
   DetailedNarrativeFlow: z.string().optional().nullable().default(null),
   DueDate: z.coerce.date().optional().nullable().default(null),
   Duration: z.number().optional().nullable().default(null),
-  MemorableQuotes: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
-  MemorableTakeaways: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
+  MemorableQuotes: z.string().optional().nullable().default(null), // Changed to string for markdown
+  MemorableTakeaways: z.string().optional().nullable().default(null), // Changed to string for markdown
   
   Notes: z.string().optional().nullable().default(null),
   Watched: z.boolean().optional().nullable().default(null),
@@ -203,7 +203,7 @@ export const videoSchema = z.object({
 
   
   KeyNumbersData: z.string().optional().nullable().default(null), 
-  KeyExamples: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
+  KeyExamples: z.string().optional().nullable().default(null), // Changed to string for markdown
   BookMediaRecommendations: z.preprocess(emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
   RelatedURLs: z.preprocess(emptyObjectToNull, z.array(z.string().url()).nullable().default([]).optional()),
   VideoGenre: z.string().optional().nullable().default(null),

@@ -48,28 +48,34 @@ const formatFieldName = (fieldName: string): string => {
 
 const VIDEO_DETAIL_FIELDS_CONFIG = [
   // ThumbHigh and URL are handled separately before the main loop
-  { key: 'ActionableAdvice', label: 'Actionable Advice', isMarkdown: true, isInitiallyCollapsed: true },
-  { key: 'Summary', label: 'TLDR', isMarkdown: true, isInitiallyCollapsed: true }, // Assuming TLDR maps to Summary from schema
-  { key: 'MainSummary', label: 'Main Summary', isMarkdown: true, isInitiallyCollapsed: false }, // Expanded by default
-  { key: 'DetailedNarrativeFlow', label: 'Detailed Narrative Flow', isMarkdown: true, isInitiallyCollapsed: false }, // Expanded by default
-  { key: 'MemorableQuotes', label: 'Memorable Quotes', isMarkdown: true, isList: true, isInitiallyCollapsed: true },
-  { key: 'MemorableTakeaways', label: 'Memorable Takeaways', isMarkdown: true, isList: true, isInitiallyCollapsed: true },
-  { key: 'KeyNumbersData', label: 'Key Numbers Data', isMarkdown: true, isList: true, isInitiallyCollapsed: true },
-  { key: 'KeyExamples', label: 'Key Examples', isMarkdown: true, isList: true, isInitiallyCollapsed: true },
+  
+  // Main content fields - reordered as per requirement
+  { key: 'MainTopic', label: 'Main Topic', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'TLDR', label: 'TLDR', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'ActionableAdvice', label: 'Actionable Advice', isMarkdown: true, isInitiallyCollapsed: false },
+  
+  // Other markdown fields (with styling)
+  { key: 'MainSummary', label: 'Main Summary', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'DetailedNarrativeFlow', label: 'Detailed Narrative Flow', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'MemorableQuotes', label: 'Memorable Quotes', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'MemorableTakeaways', label: 'Memorable Takeaways', isMarkdown: true, isInitiallyCollapsed: false },
+  { key: 'KeyExamples', label: 'Key Examples', isMarkdown: true, isInitiallyCollapsed: false },
+  
+  // List fields
+  { key: 'VideoGenre', label: 'Video Genre', isList: true, isInitiallyCollapsed: false },
+  { key: 'Persons', label: 'Persons', isList: true, isInitiallyCollapsed: false },
+  { key: 'Companies', label: 'Companies', isList: true, isInitiallyCollapsed: false },
+  { key: 'Trends', label: 'Trends', isList: true, isInitiallyCollapsed: false },
+  { key: 'Institutions', label: 'Institutions', isList: true, isInitiallyCollapsed: false },
+  { key: 'KeyNumbersData', label: 'Key Numbers', isMarkdown: true, isInitiallyCollapsed: false },
   { key: 'BookMediaRecommendations', label: 'Book/Media Recommendations', isList: true, isInitiallyCollapsed: true },
   { key: 'ExternalURLs', label: 'External URLs', isList: true, isLinkList: true, isInitiallyCollapsed: true },
-  { key: 'VideoGenre', label: 'Video Genre', isInitiallyCollapsed: true },
-  { key: 'Persons', label: 'Persons', isList: true, isInitiallyCollapsed: true },
-  { key: 'Companies', label: 'Companies', isList: true, isInitiallyCollapsed: true },
   { key: 'Indicators', label: 'Indicators', isList: true, isInitiallyCollapsed: true },
-  { key: 'Trends', label: 'Trends', isList: true, isInitiallyCollapsed: true },
   { key: 'InvestableAssets', label: 'Investable Assets', isList: true, isInitiallyCollapsed: true },
   { key: 'TickerSymbol', label: '$Ticker', isInitiallyCollapsed: true },
-  { key: 'Institutions', label: 'Institutions', isList: true, isInitiallyCollapsed: true },
   { key: 'EventsFairs', label: 'Events/Fairs', isList: true, isInitiallyCollapsed: true },
   { key: 'DOIs', label: 'DOIs', isList: true, isInitiallyCollapsed: true },
-  { key: 'Tags', label: 'Hashtags', isList: true, isInitiallyCollapsed: true }, // Maps to Tags from schema
-  { key: 'MainTopic', label: 'Main Topic', isInitiallyCollapsed: true },
+  { key: 'Tags', label: 'Hashtags', isList: true, isInitiallyCollapsed: true },
   { key: 'PrimarySources', label: 'Primary Sources', isList: true, isInitiallyCollapsed: true },
   { key: 'Sentiment', label: 'Sentiment Score', isInitiallyCollapsed: true },
   { key: 'SentimentReason', label: 'Sentiment Reason', isMarkdown: true, isInitiallyCollapsed: true },
@@ -77,7 +83,7 @@ const VIDEO_DETAIL_FIELDS_CONFIG = [
   { key: 'Description', label: 'Video Description (from YouTube)', isMarkdown: true, isInitiallyCollapsed: true },
   { key: 'TechnicalTerms', label: 'Technical Terms', isList: true, isInitiallyCollapsed: true },
   { key: 'Speaker', label: 'Speaker', isInitiallyCollapsed: true },
-  { key: 'Transcript', label: 'Transcript', isMarkdown: true, isInitiallyCollapsed: false }, // Expanded by default
+  { key: 'Transcript', label: 'Transcript', isMarkdown: true, isInitiallyCollapsed: false }
 ];
 
 interface DetailItemProps {
@@ -128,12 +134,30 @@ const DetailItem = React.memo<DetailItemProps>(({
       return <span className="text-sm text-neutral-500 italic">N/A</span>;
     }
     
-    if (isMarkdown && typeof value === 'string') { 
+    // Handle markdown content (string only)
+    if (isMarkdown && typeof value === 'string') {
       return (
         <div className="prose prose-invert prose-neutral prose-sm max-w-none markdown-box">
-          <SafeReactMarkdown>
-            {value}
-          </SafeReactMarkdown>
+          <SafeReactMarkdown>{value}</SafeReactMarkdown>
+        </div>
+      );
+    }
+    
+    // Handle list content (array of strings or objects)
+    if (isList && Array.isArray(value)) {
+      return (
+        <div className="space-y-1">
+          {value.map((item, index) => {
+            const itemValue = item && typeof item === 'object' && 'Title' in item 
+              ? (item as { Title: string }).Title 
+              : String(item);
+            return (
+              <div key={index} className="flex items-start">
+                <span className="mr-2">•</span>
+                <span>{itemValue}</span>
+              </div>
+            );
+          })}
         </div>
       );
     }
@@ -574,11 +598,27 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
               {/* Dynamically ordered video details */}
               {VIDEO_DETAIL_FIELDS_CONFIG.map(fieldConfig => {
                 const fieldValue = currentVideo[fieldConfig.key as keyof Video];
-                // Skip rendering if value is null, undefined, or an empty string/array
+                
+                // Always show TLDR section even if empty
+                if (fieldConfig.key === 'TLDR') {
+                  return (
+                    <DetailItem
+                      key={fieldConfig.key}
+                      label={fieldConfig.label}
+                      value={fieldValue as FieldValue || 'No summary available'}
+                      isMarkdown={!!fieldConfig.isMarkdown}
+                      isList={!!fieldConfig.isList}
+                      isLinkList={!!fieldConfig.isLinkList}
+                      isInitiallyCollapsed={fieldConfig.isInitiallyCollapsed === undefined ? true : fieldConfig.isInitiallyCollapsed}
+                    />
+                  );
+                }
+                
+                // Skip rendering other fields if empty
                 if (fieldValue === null || fieldValue === undefined) return null;
                 if (typeof fieldValue === 'string' && fieldValue.trim() === '') return null;
                 if (Array.isArray(fieldValue) && fieldValue.length === 0) return null;
-                // Additional check for empty objects, relevant to lint error 612f2a65-9ab2-46d4-8e8e-0c39cc0efb9a
+                // Additional check for empty objects
                 if (fieldValue !== null && typeof fieldValue === 'object' && !Array.isArray(fieldValue) && Object.keys(fieldValue).length === 0) return null;
 
                 return (
@@ -675,14 +715,6 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
                 )
               )}
             </div>
-            
-            {}
-            <div className="p-4 bg-neutral-800 rounded-lg shadow text-xs text-neutral-400 space-y-1">
-                {currentVideo.VideoID && <p>Video ID: <span className="font-mono">{currentVideo.VideoID}</span></p>}
-                {currentVideo.CreatedAt && <p>Created: {new Date(currentVideo.CreatedAt).toLocaleString()}</p>}
-                {currentVideo.UpdatedAt && <p>Last Updated: {new Date(currentVideo.UpdatedAt).toLocaleString()}</p>}
-                {currentVideo.PublishedAt && <p>Published: {new Date(currentVideo.PublishedAt).toLocaleString()}</p>}
-            </div>
 
             {/* Rework Summary Action Card */}
             <div className="p-4 bg-neutral-800 rounded-lg shadow">
@@ -705,6 +737,14 @@ const VideoDetailPageContent: React.FC<VideoDetailPageContentProps> = ({
               <p className="text-xs text-neutral-400 mt-2">
                 This will clear the &apos;Detailed Narrative Flow&apos; field. This action is useful if you plan to regenerate or significantly revise this section.
               </p>
+            </div>
+            
+            {/* Metadata Box */}
+            <div className="p-4 bg-neutral-800 rounded-lg shadow text-xs text-neutral-400 space-y-1">
+                {currentVideo.VideoID && <p>Video ID: <span className="font-mono">{currentVideo.VideoID}</span></p>}
+                {currentVideo.CreatedAt && <p>Created: {new Date(currentVideo.CreatedAt).toLocaleString()}</p>}
+                {currentVideo.UpdatedAt && <p>Last Updated: {new Date(currentVideo.UpdatedAt).toLocaleString()}</p>}
+                {currentVideo.PublishedAt && <p>Published: {new Date(currentVideo.PublishedAt).toLocaleString()}</p>}
             </div>
           </div>
         </div>
