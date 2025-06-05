@@ -13,7 +13,7 @@ declare module 'next/link' {
     prefetch?: boolean;
     locale?: string | false;
     legacyBehavior?: boolean;
-    onError?(error: any): void;
+    onError?(error: unknown): void;
   }
 
   const Link: ComponentType<LinkProps>;
@@ -38,7 +38,7 @@ declare module 'next/image' {
     objectFit?: CSSProperties['objectFit'];
     objectPosition?: CSSProperties['objectPosition'];
     onLoadingComplete?: (result: { naturalWidth: number; naturalHeight: number }) => void;
-    onError?: (error: any) => void;
+    onError?: (error: unknown) => void;
   };
 
   interface ImageLoaderProps {
@@ -70,7 +70,7 @@ declare namespace NodeJS {
 declare global {
   namespace JSX {
     interface IntrinsicElements {
-      
+      [elemName: string]: unknown;
     }
   }
 }
