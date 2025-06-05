@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Video, VideoListItem } from '@/lib/nocodb';
@@ -24,18 +25,18 @@ const cleanMarkdownContent = (content: string): string => {
     if (Array.isArray(parsed)) {
       // Clean each item in the array and join with double newlines
       return parsed
-        .map(item => {
-          // Remove any leading/trailing quotes and whitespace
-          let cleanItem = String(item).trim()
-            .replace(/^["']|["']$/g, '')  // Remove surrounding quotes
-            .replace(/^\s*-\s*/, '')       // Remove leading bullet point
-            .trim();
-          return cleanItem;
-        })
+          .map(item => {
+            // Remove any leading/trailing quotes and whitespace
+            const cleanItem = String(item).trim()
+              .replace(/^["']|["']$/g, '')  // Remove surrounding quotes
+              .replace(/^\s*-\s*/, '')       // Remove leading bullet point
+              .trim();
+            return cleanItem;
+          })
         .filter(Boolean) // Remove any empty strings
         .join('\n\n');
     }
-  } catch (e: unknown) {
+  } catch {
     // Not a JSON string, continue with other cleaning
   }
   
@@ -98,18 +99,16 @@ interface DetailItemProps {
   value: FieldValue;
   isLink?: boolean;
   isImage?: boolean;
-  isList?: boolean;
   isMarkdown?: boolean;
   isInitiallyCollapsed?: boolean;
 }
 
 const DetailItem = React.memo<DetailItemProps>(({ 
-  label, 
-  value, 
-  isLink = false, 
-  isImage = false, 
-  isList = false, 
-  isMarkdown = false, 
+  label,
+  value,
+  isLink = false,
+  isImage = false,
+  isMarkdown = false,
   isInitiallyCollapsed
 }) => {
   
@@ -168,7 +167,7 @@ const DetailItem = React.memo<DetailItemProps>(({
           } else {
             items = [String(parsed)];
           }
-        } catch (e) {
+        } catch {
           // If parsing fails, treat it as a regular string
           items = [value];
         }
@@ -218,7 +217,16 @@ const DetailItem = React.memo<DetailItemProps>(({
 
     // Handle images
     if (isImage && typeof value === 'string' && value) {
-      return <img src={value} alt={label} className="max-w-xs max-h-48 object-contain rounded-md my-2" />;
+      return (
+        <Image
+          src={value}
+          alt={label}
+          width={320}
+          height={180}
+          unoptimized
+          className="max-w-xs max-h-48 object-contain rounded-md my-2"
+        />
+      );
     }
 
     // Handle links
@@ -621,8 +629,7 @@ export function VideoDetailPageContent({
               
               const isImg = fieldKey === 'ThumbHigh';
               const isLnk = fieldKey === 'URL' || (fieldKey === 'RelatedURLs' && Array.isArray(value) && value.every(item => typeof item === 'string' && item.startsWith('http')));
-              const isMd = MARKDOWN_FIELDS.includes(String(fieldKey)) || fieldKey === 'Description' || fieldKey === 'Transcript' || (typeof value === 'string' && String(value).length > 100 && !isLnk && !isImg); 
-              const isArr = Array.isArray(value);
+              const isMd = MARKDOWN_FIELDS.includes(String(fieldKey)) || fieldKey === 'Description' || fieldKey === 'Transcript' || (typeof value === 'string' && String(value).length > 100 && !isLnk && !isImg);
 
               return (
                 <DetailItem
@@ -633,7 +640,6 @@ export function VideoDetailPageContent({
                   isMarkdown={isMd}
                   isImage={isImg}
                   isLink={isLnk}
-                  isList={isArr && !isLnk && !isImg && !isMd} 
                 />
               );
             })}

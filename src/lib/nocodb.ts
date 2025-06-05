@@ -11,27 +11,48 @@
 import axios from 'axios';
 import { z } from 'zod';
 
+/** Configuration options required to connect to NocoDB */
+export interface NocoDBConfig {
+  url: string;
+  token: string;
+  projectId: string;
+  tableName: string;
+}
+
+/**
+ * Resolves NocoDB configuration from environment variables with optional
+ * overrides. Throws if the URL or token are missing.
+ */
+export function getNocoDBConfig(overrides: Partial<NocoDBConfig> = {}): NocoDBConfig {
+  const url = overrides.url || process.env.NEXT_PUBLIC_NC_URL;
+  const token =
+    overrides.token || process.env.NEXT_PUBLIC_NC_TOKEN || process.env.NC_TOKEN;
+  const projectId =
+    overrides.projectId ||
+    process.env.NEXT_PUBLIC_NC_PROJECT_ID ||
+    process.env.NEXT_PUBLIC_NOCODB_PROJECT_ID ||
+    'phk8vxq6f1ev08h';
+  const tableName =
+    overrides.tableName ||
+    process.env.NEXT_PUBLIC_NOCODB_TABLE_NAME ||
+    'youtubeTranscripts';
+
+  if (!url) {
+    throw new Error('NEXT_PUBLIC_NC_URL is not configured');
+  }
+  if (!token) {
+    throw new Error('NEXT_PUBLIC_NC_TOKEN or NC_TOKEN is not configured');
+  }
+
+  return { url, token, projectId, tableName };
+}
+
 /**
  * In-memory cache for video data to prevent redundant API calls
  * Key: Video ID (string)
  * Value: Promise resolving to Video object or null if not found
  */
 const videoCache = new Map<string, Promise<Video | null>>();
-
-/**
- * Schema for NocoDB attachment objects
- * Represents file attachments in NocoDB records (e.g., thumbnails, documents)
- */
-const nocoDBAttachmentSchema = z.object({
-  url: z.string().url(),
-  id: z.string().optional(),
-  title: z.string().optional().nullable(),
-  mimetype: z.string().optional(),
-  size: z.number().optional(),
-  thumbnails: z.record(z.object({ signedUrl: z.string().url().optional() })).optional().nullable(),
-  signedUrl: z.string().url().optional(),
-}).passthrough();
-export type NocoDBAttachment = z.infer<typeof nocoDBAttachmentSchema>;
 
 /**
  * Transforms empty objects to null for cleaner data handling
@@ -70,7 +91,9 @@ const stringToArrayOrNullPreprocessor = (val: unknown): string[] | null => {
  * @param val - Input value (string, array, or object)
  * @returns Array of linked record items or null if input is invalid
  */
-const stringToLinkedRecordArrayPreprocessor = (val: unknown): Array<{ Id?: any; Title?: string | null; name?: string | null }> | null => {
+const stringToLinkedRecordArrayPreprocessor = (
+  val: unknown,
+): Array<{ Id?: number | string; Title?: string | null; name?: string | null }> | null => {
   if (typeof val === 'string') {
     if (val.trim() === '') return [];
     return val.split('\n').map(s => s.trim()).filter(s => s !== '').map(itemTitle => ({ Title: itemTitle, name: itemTitle }));
@@ -89,7 +112,7 @@ const stringToLinkedRecordArrayPreprocessor = (val: unknown): Array<{ Id?: any; 
  * Represents a reference to another record in the database
  */
 const linkedRecordItemSchema = z.object({
-  Id: z.any().optional(), 
+  Id: z.union([z.number().int(), z.string()]).optional(),
   Title: z.string().optional().nullable(), 
   name: z.string().optional().nullable(),  
   
@@ -115,7 +138,7 @@ export const videoSchema = z.object({
             return val[0].url; 
           }
           return null; 
-        } catch (e) {
+        } catch {
           
           return null; 
         }
@@ -290,21 +313,6 @@ const DEFAULT_PAGE_SIZE = 25;
  * @returns The updated video record
  * @throws Error if the update fails or response validation fails
  */
-/**
- * Looks up the numeric record Id in NocoDB given a VideoID string.
- * Returns the Id or throws if not found.
- */
-async function getRecordIdByVideoId(
-  videoId: string,
-  ncProjectIdParam?: string,
-  ncTableNameParam?: string
-): Promise<number> {
-  const video = await fetchVideoByVideoId(videoId, ncProjectIdParam, ncTableNameParam);
-  if (!video || typeof video.Id !== 'number') {
-    throw new Error(`No NocoDB record found for VideoID: ${videoId}`);
-  }
-  return video.Id;
-}
 
 /**
  * Updates a video record in NocoDB
@@ -346,19 +354,10 @@ export async function updateVideo(
       throw new Error(`Failed to resolve numeric ID for ${idOrVideoId}: ${errorMessage}`);
     }
   }
-  // Always use env vars for projectId and tableName if not explicitly provided
-  const currentNcUrl = process.env.NEXT_PUBLIC_NC_URL;
-  const currentNcToken = process.env.NEXT_PUBLIC_NC_TOKEN || process.env.NC_TOKEN;
-  const projectId = ncProjectIdParam || process.env.NEXT_PUBLIC_NC_PROJECT_ID || 'phk8vxq6f1ev08h';
-  const tableName = ncTableNameParam || process.env.NEXT_PUBLIC_NOCODB_TABLE_NAME || 'youtubeTranscripts';
-
-  // Validate required environment variables
-  if (!currentNcUrl) {
-    throw new Error('NEXT_PUBLIC_NC_URL is not configured');
-  }
-  if (!currentNcToken) {
-    throw new Error('NEXT_PUBLIC_NC_TOKEN or NC_TOKEN is not configured');
-  }
+  const { url: ncUrl, token, projectId, tableName } = getNocoDBConfig({
+    projectId: ncProjectIdParam,
+    tableName: ncTableNameParam,
+  });
 
   // Prepare the data for the API
   const updateData = { ...data };
@@ -380,17 +379,17 @@ export async function updateVideo(
   }
 
   // Build the URL for the PATCH request
-  const url = `${currentNcUrl}/api/v1/db/data/v1/${projectId}/${tableName}/${numericId}`;
-  
-  console.log(`[updateVideo] PATCH to:`, url, 'with data:', updateData);
-  
+  const requestUrl = `${ncUrl}/api/v1/db/data/v1/${projectId}/${tableName}/${numericId}`;
+
+  console.log(`[updateVideo] PATCH to:`, requestUrl, 'with data:', updateData);
+
   try {
     const response = await apiClient.patch(
-      url, 
+      requestUrl,
       updateData,
       {
         headers: {
-          'xc-token': currentNcToken,
+          'xc-token': token,
           'Content-Type': 'application/json',
         },
       }
@@ -422,7 +421,7 @@ export async function updateVideo(
     }
 
     return parsed.data;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Enhanced error logging
     let errorMessage = 'Unknown error';
     
@@ -484,25 +483,10 @@ interface FetchVideosOptions<T extends z.ZodTypeAny> {
 export async function fetchVideos<T extends z.ZodTypeAny>(
   options?: FetchVideosOptions<T>
 ): Promise<{ videos: z.infer<T>[]; pageInfo: PageInfo }> {
-  /**
-   * Get the current NocoDB URL and token from environment variables
-   */
-  const currentNcUrl = process.env.NEXT_PUBLIC_NC_URL;
-  const currentNcToken = process.env.NEXT_PUBLIC_NC_TOKEN;
-  
-  /**
-   * Determine the NocoDB table name and project ID to use
-   */
-  const tableName = options?.ncTableName || process.env.NEXT_PUBLIC_NOCODB_TABLE_NAME || 'youtubeTranscripts';
-  const projectId = options?.ncProjectId || process.env.NEXT_PUBLIC_NOCODB_PROJECT_ID || 'phk8vxq6f1ev08h';
-
-  /**
-   * Check if NocoDB credentials are configured
-   */
-  if (!currentNcUrl || !currentNcToken) {
-    console.error('NocoDB URL or Token is not configured.');
-    throw new Error('NocoDB credentials not configured.');
-  }
+  const { url, token, projectId, tableName } = getNocoDBConfig({
+    projectId: options?.ncProjectId,
+    tableName: options?.ncTableName,
+  });
 
   /**
    * Set the default page size and calculate the offset
@@ -520,7 +504,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
   /**
    * Construct the request parameters
    */
-  const params: Record<string, any> = {
+  const params: Record<string, string | number | undefined> = {
     limit: limit,
     offset: offset,
     shuffle: 0,
@@ -545,9 +529,9 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
      * Make the request to NocoDB
      */
     const response = await apiClient.get(
-      `${currentNcUrl}/api/v1/db/data/noco/${projectId}/${tableName}`,
+      `${url}/api/v1/db/data/noco/${projectId}/${tableName}`,
       {
-        headers: { 'xc-token': currentNcToken },
+        headers: { 'xc-token': token },
         params: params,
       }
     );
@@ -568,16 +552,22 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
      */
     return { videos: parsedResponse.data.list as z.infer<T>[], pageInfo: parsedResponse.data.pageInfo };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     /**
      * Handle any errors that occur during the request
      */
-    const requestUrl = error.config?.url || 'URL not available';
-    console.error(`Error fetching videos (Page ${page}, Limit ${limit}) from URL: ${requestUrl}:`, error.response?.data || error.message);
-    if (error.message.startsWith('Failed to parse NocoDB API response')) {
-        throw error;
+    const err = error as any;
+    const requestUrl = err?.config?.url || 'URL not available';
+    console.error(
+      `Error fetching videos (Page ${page}, Limit ${limit}) from URL: ${requestUrl}:`,
+      err?.response?.data || (err instanceof Error ? err.message : err)
+    );
+    if (err instanceof Error && err.message.startsWith('Failed to parse NocoDB API response')) {
+        throw err;
     }
-    throw new Error(`Failed to fetch videos from NocoDB (page ${page}, limit ${limit}): ${error.message}`);
+    throw new Error(
+      `Failed to fetch videos from NocoDB (page ${page}, limit ${limit}): ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 }
 
@@ -596,28 +586,19 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
     return videoCache.get(videoId)!;
   }
 
-  // Get the current NocoDB URL and token from environment variables
-  const currentNcUrl = process.env.NEXT_PUBLIC_NC_URL;
-  const currentNcToken = process.env.NEXT_PUBLIC_NC_TOKEN;
-  
-  // Determine the NocoDB table name and project ID to use
-  const tableName = ncTableNameParam || process.env.NEXT_PUBLIC_NOCODB_TABLE_NAME || 'youtubeTranscripts';
-  const projectId = ncProjectIdParam || process.env.NEXT_PUBLIC_NOCODB_PROJECT_ID || 'phk8vxq6f1ev08h';
-
-  // Check if NocoDB credentials are configured
-  if (!currentNcUrl || !currentNcToken) {
-    console.error('NocoDB URL or Token is not configured for fetchVideoByVideoId.');
-    throw new Error('NocoDB credentials not configured.');
-  }
+  const { url, token, projectId, tableName } = getNocoDBConfig({
+    projectId: ncProjectIdParam,
+    tableName: ncTableNameParam,
+  });
 
   // Make the request to NocoDB
   const fetchPromise = (async () => {
     try {
       const response = await apiClient.get(
-        `${currentNcUrl}/api/v1/db/data/noco/${projectId}/${tableName}`,
+        `${url}/api/v1/db/data/noco/${projectId}/${tableName}`,
         {
-          headers: { 'xc-token': currentNcToken },
-          params: { 
+          headers: { 'xc-token': token },
+          params: {
             where: `(VideoID,eq,${videoId})`,
             limit: 1
           },
@@ -641,19 +622,26 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
         throw new Error(`Failed to parse NocoDB API response for VideoID ${videoId}.`);
       }
       return parsedVideo.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle any errors that occur during the request
       videoCache.delete(videoId);
-      
-      if (axios.isAxiosError(error) && error.response?.status === 404) {
+
+      const err = error as any;
+
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
         console.warn(`Video with VideoID ${videoId} not found in NocoDB (404).`);
         return null;
       }
-      console.error(`Error fetching video by VideoID ${videoId}:`, error.response?.data || error.message);
-      if (error.message.startsWith('Failed to parse NocoDB API response')) {
-        throw error;
+      console.error(
+        `Error fetching video by VideoID ${videoId}:`,
+        err?.response?.data || (err instanceof Error ? err.message : err)
+      );
+      if (err instanceof Error && err.message.startsWith('Failed to parse NocoDB API response')) {
+        throw err;
       }
-      throw new Error(`Failed to fetch video (VideoID: ${videoId}) from NocoDB: ${error.message}`);
+      throw new Error(
+        `Failed to fetch video (VideoID: ${videoId}) from NocoDB: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   })();
 
@@ -704,26 +692,9 @@ interface FetchAllVideosOptions<T extends z.ZodTypeAny> {
 export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
   options?: FetchAllVideosOptions<T>
 ): Promise<z.infer<T>[]> {
-  /**
-   * Initialize the result array
-   */
-  const allItems: z.infer<T>[] = [];
-  
-  /**
-   * Initialize the current page number
-   */
-  let currentPage = 1;
-  
-  /**
-   * Determine the page size to use
-   */
-  const pageSize = options?.fields ? 50 : DEFAULT_PAGE_SIZE; 
-  
-  /**
-   * Initialize the flag to track if there are more pages
-   */
-  let hasMorePages = true;
+  const pageSize = options?.fields ? 50 : DEFAULT_PAGE_SIZE;
 
+  const schemaToUse = (options?.schema || videoSchema) as T;
   const fetchOptions: Omit<FetchVideosOptions<T>, 'schema'> = {
     sort: options?.sort,
     limit: pageSize,
@@ -732,26 +703,42 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
     ncTableName: options?.ncTableName,
   };
 
-  while (hasMorePages) {
-    try {
-      // Create a properly typed schema for this fetch
-      const schemaToUse = (options?.schema || videoSchema) as T;
-      
-      const { videos } = await fetchVideos<T>({
-        ...fetchOptions,
-        schema: schemaToUse,
-        page: currentPage,
-        limit: pageSize,
-      });
+  // Fetch the first page to determine total number of pages
+  const { videos: firstPage, pageInfo } = await fetchVideos<T>({
+    ...fetchOptions,
+    schema: schemaToUse,
+    page: 1,
+    limit: pageSize,
+  });
 
-      allItems.push(...videos);
-      hasMorePages = videos.length === pageSize;
-      currentPage++;
-    } catch (error) {
-      console.error(`Error fetching page ${currentPage} of videos:`, error);
-      throw error;
-    }
+  const allItems: z.infer<T>[] = [...firstPage];
+  const totalPages = Math.ceil(pageInfo.totalRows / pageSize);
+
+  if (totalPages <= 1) {
+    return allItems;
   }
+
+  const pages: number[] = [];
+  for (let p = 2; p <= totalPages; p++) {
+    pages.push(p);
+  }
+
+  const concurrency = 5;
+  for (let i = 0; i < pages.length; i += concurrency) {
+    const batch = pages.slice(i, i + concurrency);
+    const results = await Promise.all(
+      batch.map((page) =>
+        fetchVideos<T>({
+          ...fetchOptions,
+          schema: schemaToUse,
+          page,
+          limit: pageSize,
+        }).then((r) => r.videos)
+      )
+    );
+    results.forEach((list) => allItems.push(...list));
+  }
+
   return allItems;
 }
 

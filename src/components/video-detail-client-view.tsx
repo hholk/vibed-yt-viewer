@@ -221,7 +221,12 @@ export default function VideoDetailClientView({ video, allVideos, currentSort }:
             <ul className="list-disc list-inside pl-2 space-y-0.5 text-base text-foreground">
               {video.DOIs.map((doi, idx) => (
                 <li key={idx}>
-                  <a href={`https:
+                  <a
+                    href={`https://doi.org/${doi}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand hover:underline break-all"
+                  >
                     {doi}
                   </a>
                 </li>
