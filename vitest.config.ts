@@ -13,7 +13,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
     // For UI mode: `pnpm test:ui`
-    ui: true, 
-    open: true,
+    ui: true,
+    // Disable automatically opening the browser when running non-UI tests
+    open: false,
   },
 });

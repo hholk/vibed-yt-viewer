@@ -50,9 +50,34 @@ export function getNocoDBConfig(overrides: Partial<NocoDBConfig> = {}): NocoDBCo
 /**
  * In-memory cache for video data to prevent redundant API calls
  * Key: Video ID (string)
- * Value: Promise resolving to Video object or null if not found
+ * Value: Cached promise with timestamp for TTL handling
  */
-const videoCache = new Map<string, Promise<Video | null>>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const videoCache = new Map<string, { timestamp: number; promise: Promise<Video | null> }>();
+
+const allVideosCache = new Map<string, { timestamp: number; promise: Promise<unknown[]> }>();
+
+function getCachedVideoList(key: string) {
+  const entry = allVideosCache.get(key);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
+    return entry.promise as Promise<z.infer<z.ZodTypeAny>[]>;
+  }
+  if (entry) {
+    allVideosCache.delete(key);
+  }
+  return null;
+}
+
+function getCachedVideo(videoId: string) {
+  const entry = videoCache.get(videoId);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
+    return entry.promise;
+  }
+  if (entry) {
+    videoCache.delete(videoId);
+  }
+  return null;
+}
 
 /**
  * Transforms empty objects to null for cleaner data handling
@@ -556,17 +581,16 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
     /**
      * Handle any errors that occur during the request
      */
-    const err = error as any;
-    const requestUrl = err?.config?.url || 'URL not available';
+    const requestUrl = axios.isAxiosError(error) ? error.config?.url : 'URL not available';
     console.error(
       `Error fetching videos (Page ${page}, Limit ${limit}) from URL: ${requestUrl}:`,
-      err?.response?.data || (err instanceof Error ? err.message : err)
+      axios.isAxiosError(error) ? error.response?.data : error instanceof Error ? error.message : error
     );
-    if (err instanceof Error && err.message.startsWith('Failed to parse NocoDB API response')) {
-        throw err;
+    if (error instanceof Error && error.message.startsWith('Failed to parse NocoDB API response')) {
+        throw error;
     }
     throw new Error(
-      `Failed to fetch videos from NocoDB (page ${page}, limit ${limit}): ${err instanceof Error ? err.message : String(err)}`
+      `Failed to fetch videos from NocoDB (page ${page}, limit ${limit}): ${error instanceof Error ? error.message : String(error)}`
     );
   }
 }
@@ -581,9 +605,9 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
  * @throws Error if the request fails or response validation fails
  */
 export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: string, ncTableNameParam?: string): Promise<Video | null> {
-  // Check if the video is already cached
-  if (videoCache.has(videoId)) {
-    return videoCache.get(videoId)!;
+  const cached = getCachedVideo(videoId);
+  if (cached) {
+    return cached;
   }
 
   const { url, token, projectId, tableName } = getNocoDBConfig({
@@ -626,27 +650,25 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
       // Handle any errors that occur during the request
       videoCache.delete(videoId);
 
-      const err = error as any;
-
-      if (axios.isAxiosError(err) && err.response?.status === 404) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
         console.warn(`Video with VideoID ${videoId} not found in NocoDB (404).`);
         return null;
       }
       console.error(
         `Error fetching video by VideoID ${videoId}:`,
-        err?.response?.data || (err instanceof Error ? err.message : err)
+        axios.isAxiosError(error) ? error.response?.data : error instanceof Error ? error.message : error
       );
-      if (err instanceof Error && err.message.startsWith('Failed to parse NocoDB API response')) {
-        throw err;
+      if (error instanceof Error && error.message.startsWith('Failed to parse NocoDB API response')) {
+        throw error;
       }
       throw new Error(
-        `Failed to fetch video (VideoID: ${videoId}) from NocoDB: ${err instanceof Error ? err.message : String(err)}`
+        `Failed to fetch video (VideoID: ${videoId}) from NocoDB: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   })();
 
-  // Cache the result
-  videoCache.set(videoId, fetchPromise);
+  // Cache the result with timestamp
+  videoCache.set(videoId, { timestamp: Date.now(), promise: fetchPromise });
   
   // Return the result
   return fetchPromise;
@@ -692,6 +714,16 @@ interface FetchAllVideosOptions<T extends z.ZodTypeAny> {
 export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
   options?: FetchAllVideosOptions<T>
 ): Promise<z.infer<T>[]> {
+  const cacheKey = JSON.stringify({
+    sort: options?.sort,
+    fields: options?.fields,
+    project: options?.ncProjectId,
+    table: options?.ncTableName,
+  });
+  const cached = getCachedVideoList(cacheKey) as Promise<z.infer<T>[]> | null;
+  if (cached) {
+    return cached;
+  }
   const pageSize = options?.fields ? 50 : DEFAULT_PAGE_SIZE;
 
   const schemaToUse = (options?.schema || videoSchema) as T;
@@ -738,6 +770,8 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
     );
     results.forEach((list) => allItems.push(...list));
   }
+
+  allVideosCache.set(cacheKey, { timestamp: Date.now(), promise: Promise.resolve(allItems) });
 
   return allItems;
 }
