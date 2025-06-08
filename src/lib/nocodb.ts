@@ -25,24 +25,23 @@ export interface NocoDBConfig {
  * overrides. Throws if the URL or token are missing.
  */
 export function getNocoDBConfig(overrides: Partial<NocoDBConfig> = {}): NocoDBConfig {
-  const url = overrides.url || process.env.NEXT_PUBLIC_NC_URL;
-  const token =
-    overrides.token || process.env.NEXT_PUBLIC_NC_TOKEN || process.env.NC_TOKEN;
+  const url = overrides.url || process.env.NC_URL;
+  const token = overrides.token || process.env.NC_TOKEN;
   const projectId =
     overrides.projectId ||
-    process.env.NEXT_PUBLIC_NC_PROJECT_ID ||
-    process.env.NEXT_PUBLIC_NOCODB_PROJECT_ID ||
+    process.env.NC_PROJECT_ID ||
+    process.env.NOCODB_PROJECT_ID ||
     'phk8vxq6f1ev08h';
   const tableName =
     overrides.tableName ||
-    process.env.NEXT_PUBLIC_NOCODB_TABLE_NAME ||
+    process.env.NOCODB_TABLE_NAME ||
     'youtubeTranscripts';
 
   if (!url) {
-    throw new Error('NEXT_PUBLIC_NC_URL is not configured');
+    throw new Error('NC_URL is not configured');
   }
   if (!token) {
-    throw new Error('NEXT_PUBLIC_NC_TOKEN or NC_TOKEN is not configured');
+    throw new Error('NC_TOKEN is not configured');
   }
 
   return { url, token, projectId, tableName };

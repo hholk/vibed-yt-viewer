@@ -52,9 +52,9 @@
   - Refined `VideoSchema` and `NocoDBResponseSchema` (Zod) for robust API response validation:
     - `ThumbHigh` field transformed from NocoDB attachment array to a direct image URL string (or `null`).
     - Optional text fields (`Channel`, `Description`, `PersonalComment`) and `ImportanceRating` now default to `null` if not present in API response, resolving test inconsistencies.
-  - `fetchVideos` function to get and validate video records, dynamically reading environment variables (`NEXT_PUBLIC_NC_URL`, `NC_TOKEN`, `NEXT_PUBLIC_NOCODB_TABLE_NAME`).
+  - `fetchVideos` function to get and validate video records, dynamically reading environment variables (`NC_URL`, `NC_TOKEN`, `NOCODB_TABLE_NAME`).
   - Vitest tests (`src/lib/nocodb.test.ts`): All tests passing. Comprehensive mocking of Axios for various scenarios (success, API errors, invalid data structure, missing env vars). Tests confirm correct parsing of refined schema, including optional fields.
-   - Local NocoDB connection settings for development/testing: `NEXT_PUBLIC_NC_URL=http://nocodb:8080` (Docker network hostname), `projectId='phk8vxq6f1ev08h'` (hardcoded in `nocodb.ts`), `NC_TOKEN=<user_provided_token>`, `NEXT_PUBLIC_NOCODB_TABLE_NAME=youtubeTranscripts` (user to set these in `.env.local`).
+   - Local NocoDB connection settings for development/testing: `NC_URL=http://nocodb:8080` (Docker network hostname), `projectId='phk8vxq6f1ev08h'` (hardcoded in `nocodb.ts`), `NC_TOKEN=<user_provided_token>`, `NOCODB_TABLE_NAME=youtubeTranscripts` (user to set these in `.env.local`).
 - **NocoDB API Client (`src/lib/nocodb.ts`) String-to-Array Parsing Fix:**
   - Resolved Zod parsing errors where NocoDB API returned newline-separated strings for fields expected as arrays in `fetchVideoByVideoId`.
   - Introduced `stringToArrayOrNullPreprocessor`: Converts newline-separated strings to `string[]`, trims values, and handles empty/null inputs. Applied to fields like `MemorableQuotes`, `MemorableTakeaways`, `Hashtags`, `KeyExamples`, `InvestableAssets`, `PrimarySources`, `TechnicalTerms`.
