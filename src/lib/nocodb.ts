@@ -18,6 +18,7 @@ export interface NocoDBConfig {
   token: string;
   projectId: string;
   tableName: string;
+  sourceAlias: string; // Added sourceAlias
 }
 
 /**
@@ -25,58 +26,63 @@ export interface NocoDBConfig {
  * overrides. Throws if the URL or token are missing.
  */
 export function getNocoDBConfig(overrides: Partial<NocoDBConfig> = {}): NocoDBConfig {
-  const url = overrides.url || process.env.NC_URL;
-  const token = overrides.token || process.env.NC_TOKEN;
+  const url = overrides.url || process.env.NOCODB_URL || process.env.NC_URL;
+  const token = overrides.token || process.env.NOCODB_AUTH_TOKEN || process.env.NC_TOKEN;
   const projectId =
     overrides.projectId ||
-    process.env.NC_PROJECT_ID ||
-    process.env.NOCODB_PROJECT_ID ||
-    'phk8vxq6f1ev08h';
+    process.env.NC_PROJECT_ID || // Memory indicates NC_PROJECT_ID for .env
+    process.env.NOCODB_PROJECT_ID || // Fallback
+    'phk8vxq6f1ev08h'; // Default
   const tableName =
     overrides.tableName ||
-    process.env.NOCODB_TABLE_NAME ||
-    'youtubeTranscripts';
+    process.env.NC_TABLE_NAME || // Memory indicates NC_TABLE_NAME for .env
+    process.env.NOCODB_TABLE_NAME || // Fallback
+    'youtubeTranscripts'; // Default
+  const sourceAlias =
+    overrides.sourceAlias ||
+    process.env.NC_SOURCE_ALIAS ||
+    'noco'; // Default source alias
 
   if (!url) {
-    throw new Error('NC_URL is not configured');
+    throw new Error('NocoDB URL is not configured. Please set NOCODB_URL (or NC_URL) in your environment.');
   }
   if (!token) {
-    throw new Error('NC_TOKEN is not configured');
+    throw new Error('NocoDB Auth Token is not configured. Please set NOCODB_AUTH_TOKEN (or NC_TOKEN) in your environment.');
   }
 
-  return { url, token, projectId, tableName };
+  return { url, token, projectId, tableName, sourceAlias };
 }
 
 /**
  * In-memory cache for video data to prevent redundant API calls
- * Key: Video ID (string)
- * Value: Cached promise with timestamp for TTL handling
+ * Key: Cache key (string)
+ * Value: { data: unknown, timestamp: number }
  */
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const videoCache = new Map<string, { timestamp: number; promise: Promise<Video | null> }>();
+const videoCache = new Map<string, { data: unknown; timestamp: number }>();
 
-const allVideosCache = new Map<string, { timestamp: number; promise: Promise<z.infer<z.ZodTypeAny>[]> }>();
+// Cache TTL in milliseconds (5 minutes)
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
-function getCachedVideoList<T>(key: string): Promise<T[]> | null {
-  const entry = allVideosCache.get(key);
-  if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
-    return entry.promise as Promise<T[]>;
+// Helper function to get a cached video list
+function getCachedVideoList<T>(key: string): T[] | null {
+  const cached = videoCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > CACHE_TTL_MS) {
+    videoCache.delete(key);
+    return null;
   }
-  if (entry) {
-    allVideosCache.delete(key);
-  }
-  return null;
+  return cached.data as T[];
 }
 
-function getCachedVideo(videoId: string) {
-  const entry = videoCache.get(videoId);
-  if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
-    return entry.promise;
-  }
-  if (entry) {
+// Helper function to get a cached video by ID
+function getCachedVideo<T>(videoId: string): T | null {
+  const cached = videoCache.get(videoId);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > CACHE_TTL_MS) {
     videoCache.delete(videoId);
+    return null;
   }
-  return null;
+  return cached.data as T;
 }
 
 /**
@@ -483,7 +489,7 @@ export async function updateVideo(
   console.log(`[updateVideo] PATCH to:`, requestUrl, 'with data:', updateData);
 
   try {
-    const response = await apiClient.patch(
+    const response = await apiClient.patch<z.infer<typeof videoSchema>>(
       requestUrl,
       updateData,
       {
@@ -509,51 +515,59 @@ export async function updateVideo(
       throw new NocoDBValidationError('Received invalid data format from NocoDB', parsed.error.issues);
     }
 
-    // Invalidate cache for this video
-    if (videoCache.has(recordIdOrVideoId.toString())) {
-      videoCache.delete(recordIdOrVideoId.toString());
+    // Update the cache with the new data
+    const updatedVideo = parsed.data;
+    videoCache.set(updatedVideo.VideoID, {
+      data: updatedVideo,
+      timestamp: Date.now()
+    });
+    
+    // Also cache by numeric ID if available
+    if (updatedVideo.Id) {
+      videoCache.set(updatedVideo.Id.toString(), {
+        data: updatedVideo,
+        timestamp: Date.now()
+      });
     }
     
-    // Also invalidate by VideoID if we used a VideoID
-    if (typeof recordIdOrVideoId === 'string' && !/^\d+$/.test(recordIdOrVideoId)) {
-      videoCache.delete(recordIdOrVideoId);
-    }
-
-    return parsed.data;
+    return updatedVideo;
   } catch (error: unknown) {
-    // Enhanced error logging
+    // Handle any errors that occur during the request
     let errorMessage = 'Unknown error';
-    
+    let statusCode: number | undefined;
+    let errorData: unknown = undefined;
+
     if (axios.isAxiosError(error)) {
-      // Handle Axios errors
+      errorMessage = error.message;
+      statusCode = error.response?.status;
+      errorData = error.response?.data;
+      
       if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        errorMessage = `Status: ${error.response.status} - ${JSON.stringify(error.response.data)}`;
-        console.error('Error response data:', error.response.data);
-        console.error('Error response status:', error.response.status);
-        console.error('Error response headers:', error.response.headers);
+        console.error('NocoDB API error response:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+          headers: error.response.headers,
+        });
       } else if (error.request) {
-        // The request was made but no response was received
-        errorMessage = 'No response received from server';
-        console.error('No response received. Request config:', error.config);
-      } else {
-        // Something happened in setting up the request that triggered an Error
-        errorMessage = `Request setup error: ${error.message}`;
-        console.error('Error message:', error.message);
+        console.error('No response received from NocoDB API');
       }
     } else if (error instanceof Error) {
-      // Handle other Error objects
       errorMessage = error.message;
     } else if (typeof error === 'string') {
       errorMessage = error;
     }
-    
+
     console.error(`Error updating video record ${recordIdOrVideoId}:`, errorMessage);
+    
+    if (error instanceof NocoDBValidationError) {
+      throw error;
+    }
+    
     throw new NocoDBRequestError(
       `Failed to update video record: ${errorMessage}`,
-      axios.isAxiosError(error) ? error.response?.status : undefined,
-      axios.isAxiosError(error) ? error.response?.data : undefined
+      statusCode,
+      errorData
     );
   }
 }
@@ -630,7 +644,7 @@ export async function deleteVideo(
     } else if (typeof error === 'string') {
       errorMessage = error;
     }
-
+    
     console.error(`Error deleting video record ${recordIdOrVideoId}:`, errorMessage);
     throw new NocoDBRequestError(
       `Failed to delete video record: ${errorMessage}`,
@@ -668,7 +682,7 @@ interface FetchVideosOptions<T extends z.ZodTypeAny> {
 export async function fetchVideos<T extends z.ZodTypeAny>(
   options?: FetchVideosOptions<T>
 ): Promise<{ videos: z.infer<T>[]; pageInfo: PageInfo }> {
-  const { url, token, projectId, tableName } = getNocoDBConfig({
+  const { url, token, projectId, tableName, sourceAlias } = getNocoDBConfig({
     projectId: options?.ncProjectId,
     tableName: options?.ncTableName,
   });
@@ -710,20 +724,55 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
   } 
 
   try {
-    /**
-     * Make the request to NocoDB
-     */
-    const response = await apiClient.get(
-      `${url}/api/v1/db/data/noco/${projectId}/${tableName}`,
-      {
-        headers: { 'xc-token': token },
-        params: params,
+    // Make the request to NocoDB
+    let fieldsToRequest = options?.fields ? [...options.fields] : [];
+    let response;
+    
+    try {
+      // First try with all requested fields
+      response = await apiClient.get(
+        `${url}/api/v1/db/data/${sourceAlias}/${projectId}/${tableName}`,
+        {
+          headers: { 'xc-token': token },
+          params: {
+            limit,
+            offset: (page - 1) * limit,
+            sort: options?.sort,
+            fields: fieldsToRequest.join(','),
+          },
+        }
+      );
+    } catch (error) {
+      // If we get a field not found error, try again without the problematic fields
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        const errorData = error.response?.data as { error?: string; message?: string };
+        if (errorData?.error === 'FIELD_NOT_FOUND' && errorData.message?.includes('TickerSymbol, EventsFairs')) {
+          // Remove the problematic fields and try again
+          fieldsToRequest = fieldsToRequest.filter(field => 
+            !['TickerSymbol', 'EventsFairs'].includes(field)
+          );
+          
+          response = await apiClient.get(
+            `${url}/api/v1/db/data/${sourceAlias}/${projectId}/${tableName}`,
+            {
+              headers: { 'xc-token': token },
+              params: {
+                limit,
+                offset: (page - 1) * limit,
+                sort: options?.sort,
+                fields: fieldsToRequest.join(','),
+              },
+            }
+          );
+        } else {
+          throw error; // Re-throw if it's a different error
+        }
+      } else {
+        throw error; // Re-throw if it's not a 404 or not a field not found error
       }
-    );
+    }
 
-    /**
-     * Validate the response using the chosen schema
-     */
+    // Validate the response using the chosen schema
     const parsedResponse = responseSchema.safeParse(response.data);
 
     if (!parsedResponse.success) {
@@ -739,9 +788,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
       );
     }
     
-    /**
-     * Return the parsed response data
-     */
+    // Return the parsed response data
     return { videos: parsedResponse.data.list as z.infer<T>[], pageInfo: parsedResponse.data.pageInfo };
 
   } catch (error: unknown) {
@@ -794,88 +841,115 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
  * @throws Error if the request fails or response validation fails
  */
 export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: string, ncTableNameParam?: string): Promise<Video | null> {
-  const cached = getCachedVideo(videoId);
+  // Get cached video if available
+  const cached = getCachedVideo<Video>(videoId);
   if (cached) {
     return cached;
   }
 
-  const { url, token, projectId, tableName } = getNocoDBConfig({
+  const { url, token, projectId, tableName, sourceAlias } = getNocoDBConfig({
     projectId: ncProjectIdParam,
     tableName: ncTableNameParam,
   });
 
   // Make the request to NocoDB
-  const fetchPromise = (async () => {
-    try {
-      const response = await apiClient.get(
-        `${url}/api/v1/db/data/noco/${projectId}/${tableName}`,
-        {
-          headers: { 'xc-token': token },
-          params: {
-            where: `(VideoID,eq,${videoId})`,
-            limit: 1
-          },
-        }
+  try {
+    // First try with all fields
+    const response = await apiClient.get<NocoDBResponse<z.infer<typeof videoSchema>>>(
+      `${url}/api/v1/db/data/${sourceAlias}/${projectId}/${tableName}`,
+      {
+        headers: { 'xc-token': token },
+        params: {
+          where: `(VideoID,eq,${videoId})`,
+          limit: 1
+        },
+      }
+    );
+
+    // Validate the response using the videoSchema
+    console.log(`[fetchVideoByVideoId - ${videoId}] Raw NocoDB response data:`, JSON.stringify(response.data, null, 2));
+
+    if (!response.data?.list || !Array.isArray(response.data.list) || response.data.list.length === 0) {
+      console.warn(
+        `[fetchVideoByVideoId - ${videoId}] No matching video found with VideoID: ${videoId}`
       );
+      return null;
+    }
 
-      // Validate the response using the videoSchema
-      console.log(`[fetchVideoByVideoId - ${videoId}] Raw NocoDB response data:`, JSON.stringify(response.data, null, 2));
+    const videoData = response.data.list[0];
+    const parsedVideo = videoSchema.safeParse(videoData);
 
-      if (!response.data?.list || !Array.isArray(response.data.list) || response.data.list.length === 0) {
-        console.warn(
-          `[fetchVideoByVideoId - ${videoId}] No matching video found with VideoID: ${videoId}`
-        );
-        return null;
-      }
-
-      const videoData = response.data.list[0];
-      const parsedVideo = videoSchema.safeParse(videoData);
-
-      if (!parsedVideo.success) {
-        console.error(
-          `[fetchVideoByVideoId - ${videoId}] Failed to parse NocoDB response. Issues:`,
-          parsedVideo.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n')
-        );
-        console.error(
-          `[fetchVideoByVideoId - ${videoId}] Problematic NocoDB data for VideoID ${videoId}:`,
-          JSON.stringify(videoData, null, 2)
-        );
-        throw new NocoDBValidationError(
-          `Failed to parse NocoDB API response for VideoID ${videoId}.`,
-          parsedVideo.error.issues
-        );
-      }
-      return parsedVideo.data;
-    } catch (error: unknown) {
-      // Handle any errors that occur during the request
-      videoCache.delete(videoId);
-
-      if (axios.isAxiosError(error) && error.response?.status === 404) {
-        console.warn(`Video with VideoID ${videoId} not found in NocoDB (404).`);
-        return null;
-      }
+    if (!parsedVideo.success) {
       console.error(
-        `Error fetching video by VideoID ${videoId}:`,
-        axios.isAxiosError(error) ? error.response?.data : error instanceof Error ? error.message : error
+        `[fetchVideoByVideoId - ${videoId}] Failed to parse NocoDB response. Issues:`,
+        parsedVideo.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n')
       );
-      if (error instanceof NocoDBValidationError) {
-        throw error;
-      }
-      throw new NocoDBRequestError(
-        `Failed to fetch video (VideoID: ${videoId}) from NocoDB: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        axios.isAxiosError(error) ? error.response?.status : undefined,
-        axios.isAxiosError(error) ? error.response?.data : undefined
+      console.error(
+        `[fetchVideoByVideoId - ${videoId}] Problematic NocoDB data for VideoID ${videoId}:`,
+        JSON.stringify(videoData, null, 2)
+      );
+      throw new NocoDBValidationError(
+        `Failed to parse NocoDB API response for VideoID ${videoId}.`,
+        parsedVideo.error.issues
       );
     }
-  })();
 
-  // Cache the result with timestamp
-  videoCache.set(videoId, { timestamp: Date.now(), promise: fetchPromise });
-  
-  // Return the result
-  return fetchPromise;
+    // Cache the result
+    videoCache.set(videoId, {
+      data: parsedVideo.data,
+      timestamp: Date.now()
+    });
+
+    return parsedVideo.data;
+  } catch (error: unknown) {
+    // Handle any errors that occur during the request
+    let errorMessage = 'Unknown error';
+    let statusCode: number | undefined;
+    let errorData: unknown = undefined;
+
+    if (axios.isAxiosError(error)) {
+      errorMessage = error.message;
+      statusCode = error.response?.status;
+      errorData = error.response?.data;
+      
+      if (error.response) {
+        console.error('NocoDB API error response:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+          headers: error.response.headers,
+        });
+      } else if (error.request) {
+        console.error('No response received from NocoDB API');
+      }
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+      return null;
+    }
+    
+    console.error(
+      `Error fetching video by VideoID ${videoId}:`,
+      axios.isAxiosError(error) 
+        ? error.response?.data 
+        : error instanceof Error 
+          ? error.message 
+          : String(error)
+    );
+    
+    if (error instanceof NocoDBValidationError) {
+      throw error;
+    }
+    
+    throw new NocoDBRequestError(
+      `Failed to fetch video (VideoID: ${videoId}) from NocoDB: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      axios.isAxiosError(error) ? error.response?.status : undefined,
+      axios.isAxiosError(error) ? error.response?.data : undefined
+    );
+  }
 }
 
 /**
@@ -968,11 +1042,11 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
   for (let i = 0; i < pages.length; i += concurrency) {
     const batch = pages.slice(i, i + concurrency);
     const results = await Promise.all(
-      batch.map((page) =>
+      batch.map((pageNum) =>
         fetchVideos<T>({
           ...fetchOptions,
           schema: schemaToUse,
-          page,
+          page: pageNum,
           limit: pageSize,
         }).then((r) => r.videos)
       )
@@ -980,7 +1054,11 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
     results.forEach((list) => allItems.push(...list));
   }
 
-  allVideosCache.set(cacheKey, { timestamp: Date.now(), promise: Promise.resolve(allItems) });
+  // Cache the results
+  videoCache.set(cacheKey, { 
+    data: allItems, 
+    timestamp: Date.now() 
+  });
 
   return allItems;
 }
