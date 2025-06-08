@@ -25,8 +25,8 @@ export interface NocoDBConfig {
  * overrides. Throws if the URL or token are missing.
  */
 export function getNocoDBConfig(overrides: Partial<NocoDBConfig> = {}): NocoDBConfig {
-  const url = overrides.url || process.env.NC_URL;
-  const token = overrides.token || process.env.NC_TOKEN;
+  const url = overrides.url || process.env.NC_URL || process.env.NOCODB_API_URL;
+  const token = overrides.token || process.env.NC_TOKEN || process.env.NOCODB_API_TOKEN;
   const projectId =
     overrides.projectId ||
     process.env.NC_PROJECT_ID ||
@@ -749,23 +749,6 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
      * Handle any errors that occur during the request
      */
     const requestUrl = axios.isAxiosError(error) ? error.config?.url : 'URL not available';
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
-      console.warn(
-        `Received 404 from NocoDB when fetching page ${page}. Returning empty result set.`
-      );
-      return {
-        videos: [],
-        pageInfo: {
-          totalRows: 0,
-          page,
-          pageSize: limit,
-          isFirstPage: true,
-          isLastPage: true,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      };
-    }
 
     console.error(
       `Error fetching videos (Page ${page}, Limit ${limit}) from URL: ${requestUrl}:`,
