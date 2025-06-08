@@ -36,6 +36,9 @@ The app uses Next.js 15 with the App Router and React Server Components. Data co
 - Node.js 18.0.0 or later
 - pnpm (recommended) or npm/yarn
 - NocoDB instance (or compatible REST API)
+### VS Code Development Container
+If you use VS Code, the repository includes a preconfigured **dev container**. Install the [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension and run **"Dev Containers: Reopen in Container"**. The container provides Node.js 20 and pnpm, and automatically installs recommended extensions (ESLint, Prettier, Playwright).
+
 
 ## Setup
 
