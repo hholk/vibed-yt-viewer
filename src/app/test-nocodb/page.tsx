@@ -5,11 +5,16 @@ import Link from 'next/link';
 async function getData() {
   console.log("Attempting to fetch videos for test page...");
   try {
-    const videos = await fetchVideos();
+    const { videos } = await fetchVideos();
     console.log("Successfully fetched videos:", videos);
     if (videos.length === 0) {
-      console.log("fetchVideos returned an empty array. This might be expected if your table is empty, or it could indicate an issue if you expect data.");
-      return { data: videos, message: "Fetched successfully, but no videos found in the table." };
+      console.log(
+        "fetchVideos returned an empty array. This might be expected if your table is empty, or it could indicate an issue if you expect data."
+      );
+      return {
+        data: videos,
+        message: "Fetched successfully, but no videos found in the table.",
+      };
     }
     return { data: videos };
   } catch (error) {
