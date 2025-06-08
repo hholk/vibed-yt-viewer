@@ -7,7 +7,7 @@ import Image from 'next/image';
 import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Video, VideoListItem } from '@/lib/nocodb';
-import { updateVideo } from '@/lib/nocodb';
+import { updateVideo, deleteVideo } from '@/lib/nocodb';
 import { StarRating } from '@/components/StarRating';
 
 export type { Video, VideoListItem } from '@/lib/nocodb';
@@ -340,8 +340,9 @@ export function VideoDetailPageContent({
   const [currentVideo, setCurrentVideo] = useState<Video>(video);
   const [isEditingComment, setIsEditingComment] = useState(false);
   const [personalComment, setPersonalComment] = useState(video.PersonalComment || '');
-  const [isSaving, setIsSaving] = useState(false); 
+  const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Handler to clear DetailedNarrativeFlow
   const handleClearNarrative = async () => {
@@ -358,6 +359,26 @@ export function VideoDetailPageContent({
       alert('Failed to clear narrative. Please try again.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteVideo = async () => {
+    if (!currentVideo?.Id) return;
+    if (!window.confirm('Delete this video entry? This action cannot be undone.')) {
+      return;
+    }
+    setIsDeleting(true);
+    setSaveError(null);
+    try {
+      await deleteVideo(currentVideo.Id);
+      alert('Video deleted successfully.');
+      router.push('/');
+    } catch (error) {
+      console.error('Failed to delete video:', error);
+      setSaveError(error instanceof Error ? error.message : 'Failed to delete video.');
+      alert('Failed to delete video. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -551,15 +572,25 @@ export function VideoDetailPageContent({
     <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
       <div className="container mx-auto max-w-5xl">
         {/* Narrative clear button in right column, visible if narrative exists */}
-        {currentVideo?.DetailedNarrativeFlow && (
-          <div className="fixed top-24 right-8 z-20">
+        {currentVideo?.Id && (
+          <div className="fixed top-24 right-8 z-20 space-y-2">
+            {currentVideo.DetailedNarrativeFlow && (
+              <button
+                onClick={handleClearNarrative}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 shadow-md transition-colors"
+                aria-label="Clear Narrative"
+                disabled={isSaving}
+              >
+                {isSaving ? 'Clearing...' : 'Clear Narrative'}
+              </button>
+            )}
             <button
-              onClick={handleClearNarrative}
-              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 shadow-md transition-colors"
-              aria-label="Clear Narrative"
-              disabled={isSaving}
+              onClick={handleDeleteVideo}
+              className="px-4 py-2 bg-red-700 text-white rounded hover:bg-red-800 shadow-md transition-colors"
+              aria-label="Delete Video"
+              disabled={isDeleting}
             >
-              {isSaving ? 'Clearing...' : 'Clear Narrative'}
+              {isDeleting ? 'Deleting...' : 'Delete Video'}
             </button>
           </div>
         )}

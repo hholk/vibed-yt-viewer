@@ -493,6 +493,88 @@ export async function updateVideo(
   }
 }
 
+/**
+ * Deletes a video record from NocoDB.
+ *
+ * Accepts either a numeric recordId or a VideoID string. If a string is
+ * provided, the numeric Id is resolved via `fetchVideoByVideoId`.
+ */
+export async function deleteVideo(
+  recordIdOrVideoId: number | string,
+  ncProjectIdParam?: string,
+  ncTableNameParam?: string
+): Promise<void> {
+  async function resolveNumericId(
+    idOrVideoId: number | string,
+    ncProjectId?: string,
+    ncTableName?: string
+  ): Promise<number> {
+    if (typeof idOrVideoId === 'number') return idOrVideoId;
+    const asNum = Number(idOrVideoId);
+    if (!isNaN(asNum) && Number.isInteger(asNum)) return asNum;
+    try {
+      const video = await fetchVideoByVideoId(idOrVideoId, ncProjectId, ncTableName);
+      if (!video) {
+        throw new Error(`No video found with VideoID: ${idOrVideoId}`);
+      }
+      return video.Id;
+    } catch (error: unknown) {
+      console.error(`Error resolving numeric ID for ${idOrVideoId}:`, error);
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to resolve numeric ID for ${idOrVideoId}: ${msg}`);
+    }
+  }
+
+  const { url, token, projectId, tableName } = getNocoDBConfig({
+    projectId: ncProjectIdParam,
+    tableName: ncTableNameParam,
+  });
+
+  let numericId: number;
+  try {
+    numericId = await resolveNumericId(recordIdOrVideoId, projectId, tableName);
+    console.log(`[deleteVideo] Resolved record ID ${recordIdOrVideoId} to numeric ID:`, numericId);
+  } catch (error) {
+    console.error(`[deleteVideo] Failed to resolve numeric ID for record ${recordIdOrVideoId}:`, error);
+    throw new Error(`Could not find video with ID: ${recordIdOrVideoId}`);
+  }
+
+  const requestUrl = `${url}/api/v1/db/data/v1/${projectId}/${tableName}/${numericId}`;
+  console.log('[deleteVideo] DELETE to:', requestUrl);
+
+  try {
+    await apiClient.delete(requestUrl, { headers: { 'xc-token': token } });
+
+    videoCache.delete(recordIdOrVideoId.toString());
+    if (typeof recordIdOrVideoId === 'string' && !/^\d+$/.test(recordIdOrVideoId)) {
+      videoCache.delete(recordIdOrVideoId);
+    }
+  } catch (error: unknown) {
+    let errorMessage = 'Unknown error';
+    if (axios.isAxiosError(error)) {
+      if (error.response) {
+        errorMessage = `Status: ${error.response.status} - ${JSON.stringify(error.response.data)}`;
+        console.error('Error response data:', error.response.data);
+      } else if (error.request) {
+        errorMessage = 'No response received from server';
+      } else {
+        errorMessage = `Request setup error: ${error.message}`;
+      }
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    }
+
+    console.error(`Error deleting video record ${recordIdOrVideoId}:`, errorMessage);
+    throw new NocoDBRequestError(
+      `Failed to delete video record: ${errorMessage}`,
+      axios.isAxiosError(error) ? error.response?.status : undefined,
+      axios.isAxiosError(error) ? error.response?.data : undefined
+    );
+  }
+}
+
 interface FetchVideosOptions<T extends z.ZodTypeAny> {
   sort?: string;
   limit?: number;
