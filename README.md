@@ -26,6 +26,10 @@ A modern, responsive web application for browsing, searching, and interacting wi
 - **API Client**: Axios
 - **Testing**: Vitest, React Testing Library
 - **Linting**: ESLint, Prettier
+## Architecture Overview
+
+The app uses Next.js 15 with the App Router and React Server Components. Data comes from a NocoDB backend accessed via an Axios-based client. Tailwind CSS and shadcn/ui provide the UI layer. See the project structure below for folder layout.
+
 
 ## 📦 Prerequisites
 
@@ -33,7 +37,7 @@ A modern, responsive web application for browsing, searching, and interacting wi
 - pnpm (recommended) or npm/yarn
 - NocoDB instance (or compatible REST API)
 
-## 🚀 Getting Started
+## Setup
 
 1. **Clone the repository**
    ```bash
@@ -47,16 +51,7 @@ A modern, responsive web application for browsing, searching, and interacting wi
    ```
 
 3. **Set up environment variables**
-   Create a `.env.local` file in the project root with the following variables:
-   ```env
-   # NocoDB Configuration
-   NEXT_PUBLIC_NC_URL=http://your-nocodb-instance:8080
-   NC_TOKEN=your-nocodb-api-token
-   NEXT_PUBLIC_NOCODB_TABLE_NAME=youtubeTranscripts
-   
-   # Optional: Customize these if needed
-   # NEXT_PUBLIC_NC_PROJECT_ID=phk8vxq6f1ev08h
-   ```
+   See the [Environment Setup](#environment-setup) section for required variables.
 
 4. **Start the development server**
    ```bash
@@ -64,7 +59,22 @@ A modern, responsive web application for browsing, searching, and interacting wi
    ```
 
 5. **Open your browser**
-   Visit [http://localhost:3000](http://localhost:3000) to see the application in action.
+   Visit [http://localhost:3030](http://localhost:3030) to see the application in action.
+
+## Environment Setup
+
+The application expects a running NocoDB instance and a few environment variables. Create a `.env.local` file with content similar to:
+```env
+NEXT_PUBLIC_NC_URL=http://localhost:8080
+NC_TOKEN=your_nocodb_token
+NEXT_PUBLIC_NOCODB_TABLE_NAME=youtubeTranscripts
+# NEXT_PUBLIC_NC_PROJECT_ID=phk8vxq6f1ev08h
+```
+
+If you do not have NocoDB running locally you can start one with Docker:
+```bash
+docker run -d --name nocodb -p 8080:8080 nocodb/nocodb:latest
+```
 
 ## 🧪 Running Tests
 
@@ -82,6 +92,24 @@ Run tests with coverage:
 ```bash
 pnpm test:coverage
 ```
+
+## Development Workflow
+
+1. Run `pnpm dev` to start the local server with hot reload.
+2. Use `pnpm lint` and `pnpm test:watch` while coding.
+3. Commit your changes and open a pull request when ready.
+
+## Common Commands
+
+| Command | Description |
+| ------- | ----------- |
+| `pnpm dev` | Start the development server on port 3030 |
+| `pnpm lint` | Run ESLint checks |
+| `pnpm test` | Execute the test suite |
+| `pnpm test:watch` | Run tests in watch mode |
+| `pnpm coverage` | Generate coverage report |
+| `pnpm build` | Build for production |
+| `pnpm start` | Start the production server |
 
 ## 🏗️ Project Structure
 
