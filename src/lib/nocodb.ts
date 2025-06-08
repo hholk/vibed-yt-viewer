@@ -283,7 +283,72 @@ export const videoListItemSchema = z.object({
     z.string().url().nullable()
   ), 
   Channel: z.string().optional().nullable(),
-  VideoID: z.string(), 
+  Description: z.string().optional().nullable(),
+  VideoGenre: z.string().optional().nullable(),
+  Persons: z
+    .preprocess(
+      stringToLinkedRecordArrayPreprocessor,
+      z.array(linkedRecordItemSchema).nullable().default([]).optional(),
+    ),
+  Companies: z
+    .preprocess(
+      stringToLinkedRecordArrayPreprocessor,
+      z.array(linkedRecordItemSchema).nullable().default([]).optional(),
+    ),
+  Indicators: z
+    .preprocess(
+      stringToLinkedRecordArrayPreprocessor,
+      z.array(linkedRecordItemSchema).nullable().default([]).optional(),
+    ),
+  Trends: z
+    .preprocess(
+      stringToLinkedRecordArrayPreprocessor,
+      z.array(linkedRecordItemSchema).nullable().default([]).optional(),
+    ),
+  InvestableAssets: z.preprocess(
+    stringToArrayOrNullPreprocessor,
+    z.array(z.string()).nullable().default([]).optional(),
+  ),
+  TickerSymbol: z.string().optional().nullable(),
+  Institutions: z
+    .preprocess(
+      stringToLinkedRecordArrayPreprocessor,
+      z.array(linkedRecordItemSchema).nullable().default([]).optional(),
+    ),
+  EventsFairs: z.preprocess(
+    emptyObjectToNull,
+    z.array(z.string()).nullable().default([]).optional(),
+  ),
+  DOIs: z.preprocess(
+    emptyObjectToNull,
+    z.array(z.string()).nullable().default([]).optional(),
+  ),
+  Hashtags: z.preprocess(
+    stringToArrayOrNullPreprocessor,
+    z.array(z.string()).nullable().default([]).optional(),
+  ),
+  MainTopic: z.string().optional().nullable(),
+  PrimarySources: z.preprocess(
+    stringToArrayOrNullPreprocessor,
+    z.array(z.string()).nullable().default([]).optional(),
+  ),
+  Sentiment: z
+    .preprocess(
+      (val) => {
+        if (val === null || val === undefined) return null;
+        const num = Number(val);
+        return isNaN(num) ? null : num;
+      },
+      z.number().nullable().default(null),
+    )
+    .optional(),
+  SentimentReason: z.string().optional().nullable(),
+  TechnicalTerms: z.preprocess(
+    stringToArrayOrNullPreprocessor,
+    z.array(z.string()).nullable().default([]).optional(),
+  ),
+  Speaker: z.string().optional().nullable(),
+  VideoID: z.string(),
 }).describe('videoListItemSchema_grid');
 export type VideoListItem = z.infer<typeof videoListItemSchema>;
 

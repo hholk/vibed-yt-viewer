@@ -1,8 +1,7 @@
 import { fetchAllVideos, type VideoListItem, videoListItemSchema } from "@/lib/nocodb";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Terminal } from 'lucide-react';
-import { SortDropdown } from '@/components/sort-dropdown';
-import { VideoCard } from '@/components/video-card';
+import { VideoListClient } from '@/components/video-list-client';
 
 export default async function HomePage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ sort?: string; [key: string]: string | string[] | undefined }> }) {
   let videos: VideoListItem[] = [];
@@ -15,7 +14,31 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
     
     const fetchedVideosData = await fetchAllVideos({
       sort: currentSort,
-      fields: ['Id', 'Title', 'ThumbHigh', 'Channel', 'VideoID'], 
+      fields: [
+        'Id',
+        'Title',
+        'ThumbHigh',
+        'Channel',
+        'Description',
+        'VideoGenre',
+        'VideoID',
+        'Persons',
+        'Companies',
+        'Indicators',
+        'Trends',
+        'InvestableAssets',
+        'TickerSymbol',
+        'Institutions',
+        'EventsFairs',
+        'DOIs',
+        'Hashtags',
+        'MainTopic',
+        'PrimarySources',
+        'Sentiment',
+        'SentimentReason',
+        'TechnicalTerms',
+        'Speaker',
+      ],
       schema: videoListItemSchema,
     });
     videos = fetchedVideosData;
@@ -53,19 +76,8 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
 
   return (
     <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-brand font-mono">Video Collection</h1>
-        <SortDropdown />
-      </div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-        {videos.map((video, index) => (
-          <VideoCard 
-            key={video.Id} 
-            video={video} 
-            priority={index === 0} 
-          />
-        ))}
-      </div>
+      <h1 className="mb-6 text-3xl font-bold font-mono text-brand">Video Collection</h1>
+      <VideoListClient videos={videos} />
     </div>
   );
 }
