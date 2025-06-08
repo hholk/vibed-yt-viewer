@@ -161,7 +161,7 @@ Done:
   - Schema uses `.catchall(z.unknown())` to allow undefined fields.
 - **Data Fetching (`fetchVideos` in `src/lib/nocodb.ts`):**
   - Uses `axios` to fetch data.
-  - Reads `NEXT_PUBLIC_NC_URL`, `NC_TOKEN`, `NEXT_PUBLIC_NOCODB_TABLE_NAME` environment variables at runtime.
+  - Reads `NC_URL`, `NC_TOKEN`, `NOCODB_TABLE_NAME` environment variables at runtime.
 - **Testing (`src/lib/nocodb.test.ts`):**
   - All Vitest tests pass.
   - Mocks `axios` to simulate API responses.

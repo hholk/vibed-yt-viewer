@@ -38,9 +38,9 @@ export default async function TestNocoDBPage() {
           <div>
             <strong>Troubleshooting Tips:</strong>
             <ul>
-              <li>Ensure your NocoDB instance is running at the URL specified in <code>NEXT_PUBLIC_NC_URL</code> (e.g., <code>http:</code>).</li>
-              <li>Verify the <code>NEXT_PUBLIC_NC_TOKEN</code> in your <code>.env.local</code> file is correct and has read permissions for the table.</li>
-              <li>Check that the table name (<code>NEXT_PUBLIC_NOCODB_TABLE_NAME</code> in <code>.env.local</code>, or default <code>youtubeTranscripts</code>) exists in your NocoDB project.</li>
+              <li>Ensure your NocoDB instance is running at the URL specified in <code>NC_URL</code> (e.g., <code>http:</code>).</li>
+              <li>Verify the <code>NC_TOKEN</code> in your <code>.env.local</code> file is correct and has read permissions for the table.</li>
+              <li>Check that the table name (<code>NOCODB_TABLE_NAME</code> in <code>.env.local</code>, or default <code>youtubeTranscripts</code>) exists in your NocoDB project.</li>
               <li>Confirm your Next.js development server was restarted after creating/modifying <code>.env.local</code> and changing the port in <code>package.json</code>.</li>
               <li>Look at the terminal console where you ran <code>pnpm dev</code> for more detailed error logs from the <code>fetchVideos</code> function.</li>
             </ul>

@@ -68,10 +68,10 @@ If you use VS Code, the repository includes a preconfigured **dev container**. I
 
 The application expects a running NocoDB instance and a few environment variables. Create a `.env.local` file with content similar to:
 ```env
-NEXT_PUBLIC_NC_URL=http://localhost:8080
+NC_URL=http://localhost:8080
 NC_TOKEN=your_nocodb_token
-NEXT_PUBLIC_NOCODB_TABLE_NAME=youtubeTranscripts
-# NEXT_PUBLIC_NC_PROJECT_ID=phk8vxq6f1ev08h
+NOCODB_TABLE_NAME=youtubeTranscripts
+# NC_PROJECT_ID=phk8vxq6f1ev08h
 ```
 
 If you do not have NocoDB running locally you can start one with Docker:

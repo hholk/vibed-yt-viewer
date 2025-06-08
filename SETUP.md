@@ -32,12 +32,12 @@ Create a `.env.local` file in the project root with the following content:
 
 ```env
 # NocoDB Configuration
-NEXT_PUBLIC_NC_URL=http://localhost:8080 //nocodb
+NC_URL=http://localhost:8080 # nocodb
 NC_TOKEN=your_nocodb_token_here
-NEXT_PUBLIC_NOCODB_TABLE_NAME=youtubeTranscripts
-NEXT_PUBLIC_NOCODB_PROJECT_ID=phk8vxq6f1ev08h
+NOCODB_TABLE_NAME=youtubeTranscripts
+NOCODB_PROJECT_ID=phk8vxq6f1ev08h
 ```
-//NEXT_PUBLIC_NC_URL=http://nocodb:8080
+#NC_URL=http://nocodb:8080
 
 
 
