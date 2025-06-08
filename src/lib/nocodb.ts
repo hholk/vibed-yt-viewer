@@ -749,6 +749,24 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
      * Handle any errors that occur during the request
      */
     const requestUrl = axios.isAxiosError(error) ? error.config?.url : 'URL not available';
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      console.warn(
+        `Received 404 from NocoDB when fetching page ${page}. Returning empty result set.`
+      );
+      return {
+        videos: [],
+        pageInfo: {
+          totalRows: 0,
+          page,
+          pageSize: limit,
+          isFirstPage: true,
+          isLastPage: true,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      };
+    }
+
     console.error(
       `Error fetching videos (Page ${page}, Limit ${limit}) from URL: ${requestUrl}:`,
       axios.isAxiosError(error) ? error.response?.data : error instanceof Error ? error.message : error
