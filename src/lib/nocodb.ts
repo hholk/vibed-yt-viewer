@@ -127,7 +127,7 @@ const stringToLinkedRecordArrayPreprocessor = (
 ): Array<{ Id?: number | string; Title?: string | null; name?: string | null }> | null => {
   if (typeof val === 'string') {
     if (val.trim() === '') return [];
-    return val.split('\n').map(s => s.trim()).filter(s => s !== '').map(itemTitle => ({ Title: itemTitle, name: itemTitle }));
+    return val.split(',').map(s => s.trim()).filter(s => s !== '').map(itemTitle => ({ Title: itemTitle, name: itemTitle }));
   }
   if (Array.isArray(val)) { 
     return val;
@@ -669,6 +669,11 @@ interface FetchVideosOptions<T extends z.ZodTypeAny> {
    * Override for NocoDB table name
    */
   ncTableName?: string;
+  /**
+   * Optional search query string for tags.
+   * Words in the string will be used to filter with 'ilike' on the Hashtags field.
+   */
+  tagSearchQuery?: string;
 }
 
 /**
@@ -723,6 +728,17 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
     params.fields = options.fields.join(',');
   } 
 
+  // Add tag search query to the request parameters if specified
+  if (options?.tagSearchQuery) {
+    const searchWords = options.tagSearchQuery.trim().split(/\s+/);
+    if (searchWords.length > 0) {
+      const whereConditions = searchWords
+        .map((word: string) => `(Hashtags,ilike,%${word}%))`) 
+        .join('~and');
+      params.where = whereConditions;
+    }
+  }
+
   try {
     // Make the request to NocoDB
     let fieldsToRequest = options?.fields ? [...options.fields] : [];
@@ -739,6 +755,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
             offset: (page - 1) * limit,
             sort: options?.sort,
             fields: fieldsToRequest.join(','),
+            where: params.where, // Add where clause
           },
         }
       );
@@ -761,6 +778,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
                 offset: (page - 1) * limit,
                 sort: options?.sort,
                 fields: fieldsToRequest.join(','),
+                where: params.where, // Add where clause
               },
             }
           );
@@ -779,7 +797,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
       console.error(
         `Failed to parse NocoDB response (Page: ${page}, Limit: ${limit}, Fields: ${
           params.fields || 'all'
-        }, Schema: ${schemaToUse.description || 'video schema'}):`,
+        }, Where: ${params.where || 'none'}, Schema: ${schemaToUse.description || 'video schema'}):`,
         parsedResponse.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ')
       );
       throw new NocoDBValidationError(
@@ -979,6 +997,11 @@ interface FetchAllVideosOptions<T extends z.ZodTypeAny> {
    * Override for NocoDB table name
    */
   ncTableName?: string;
+  /**
+   * Optional search query string for tags.
+   * Words in the string will be used to filter with 'ilike' on the Hashtags field.
+   */
+  tagSearchQuery?: string;
 }
 
 /**
@@ -1016,6 +1039,7 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
     fields: options?.fields,
     ncProjectId: options?.ncProjectId,
     ncTableName: options?.ncTableName,
+    tagSearchQuery: options?.tagSearchQuery, // Pass down the tag search query
   };
 
   // Fetch the first page to determine total number of pages
