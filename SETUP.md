@@ -9,6 +9,10 @@ This guide will help you set up the YT-Viewer project from scratch.
 - Docker (for NocoDB)
 - Git
 
+### VS Code Dev Container (optional)
+If you use VS Code, install the Dev Containers extension and run **Reopen in Container**. The container provides Node.js 20, pnpm, and installs dependencies automatically.
+
+
 ## 1. Clone the Repository
 
 ```bash
