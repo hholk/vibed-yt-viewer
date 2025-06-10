@@ -28,7 +28,6 @@
   - Brand color: CSS variable `--color-brand: hsl(0, 0%, 20%)` (dark grey) in `src/app/globals.css`.
   - Fluid typography: CSS variable `--font-size-fluid-base` in `src/app/globals.css`.
   - Integrated with Tailwind CSS in `tailwind.config.ts` and `src/app/globals.css`.
-  - Verified visually and with Chromatic (baseline assumed).
 - **NocoDB API Client (`src/lib/nocodb.ts`) & Schema Refinement**
 - **Video List Page (`src/app/page.tsx`, `src/lib/nocodb.ts`, styling files) & Theming**
   - **Data Fetching & Display:**
@@ -112,7 +111,7 @@
 - **Video Detail Page UI & Data Fetching (Task 4.8 & User Feedback)**:
   - Reordered fields in `src/app/video/[videoId]/page.tsx` based on user specification.
   - Modified `DetailItem` component to always display the field label; empty/null values show 'N/A'.
-  - All collapsible detail items (`<details>`) remain expanded by default.
+  - Most detail items start collapsed except key fields like ThumbHigh, URL, Actionable Advice, TLDR, and MainSummary.
   - Added an on-page note stating that `KeyNumbersData` and `KeyExamples` are not displayed as they are not in `videoSchema`.
   - **Fixed Data Fetching**: Resolved Next.js 'sync-dynamic-apis' error by `awaiting params` before use in `VideoDetailPage` and `generateMetadata`.
   - **Fixed Lint Error**: Imported `Metadata` type from 'next' in `page.tsx` to resolve `Cannot find name 'Metadata'`.
