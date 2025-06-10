@@ -1,6 +1,6 @@
 # YouTube Video Viewer
 
-A modern, responsive web application for browsing, searching, and interacting with a collection of YouTube videos. Built with Next.js 13+ (App Router), TypeScript, Tailwind CSS, and shadcn/ui components. The application connects to a NocoDB backend for data storage and management.
+A modern, responsive web application for browsing, searching, and interacting with a collection of YouTube videos. Built with Next.js 15 (App Router), TypeScript, Tailwind CSS, and shadcn/ui components. The application connects to a NocoDB backend for data storage and management.
 
 ## 🚀 Features
 
@@ -12,20 +12,18 @@ A modern, responsive web application for browsing, searching, and interacting wi
 - **Responsive Design**: Works on desktop and mobile devices
 - **Type Safety**: Built with TypeScript for better developer experience
 - **Modern UI**: Clean, accessible interface built with shadcn/ui components
-- **Server Components**: Optimized performance with Next.js 13+ App Router
+- **Server Components**: Optimized performance with Next.js 15 App Router
 
 ## 🛠️ Tech Stack
 
-- **Framework**: Next.js 13+ (App Router)
+- **Framework**: Next.js 15 (App Router)
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
 - **UI Components**: shadcn/ui
-- **State Management**: React Context + React Query (optional)
-- **Form Handling**: React Hook Form
 - **Data Validation**: Zod
 - **API Client**: Axios
 - **Testing**: Vitest, React Testing Library
-- **Linting**: ESLint, Prettier
+- **Linting**: ESLint
 ## Architecture Overview
 
 The app uses Next.js 15 with the App Router and React Server Components. Data comes from a NocoDB backend accessed via an Axios-based client. Tailwind CSS and shadcn/ui provide the UI layer. See the project structure below for folder layout.
@@ -37,7 +35,7 @@ The app uses Next.js 15 with the App Router and React Server Components. Data co
 - pnpm (recommended) or npm/yarn
 - NocoDB instance (or compatible REST API)
 ### VS Code Development Container
-If you use VS Code, the repository includes a preconfigured **dev container**. Install the [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension and run **"Dev Containers: Reopen in Container"**. The container provides Node.js 20 and pnpm, and automatically installs recommended extensions (ESLint, Prettier, Playwright).
+If you use VS Code, the repository includes a preconfigured **dev container**. Install the [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension and run **"Dev Containers: Reopen in Container"**. The container provides Node.js 20 and pnpm, and automatically installs recommended extensions (ESLint, Playwright).
 
 
 ## Setup
@@ -119,7 +117,7 @@ pnpm test:coverage
 ```
 yt-viewer/
 ├── src/
-│   ├── app/                    # Next.js 13+ App Router
+│   ├── app/                    # Next.js 15 App Router
 │   │   ├── (main)/             # Main application routes
 │   │   │   ├── page.tsx        # Home page
 │   │   │   └── video/          # Video-related routes
@@ -171,7 +169,6 @@ The application is designed to work with a NocoDB instance with the following re
 ## 📝 Code Style
 
 - **TypeScript**: Strict mode enabled
-- **Formatting**: Prettier with default settings
 - **Linting**: ESLint with recommended rules
 - **Imports**: Absolute imports with `@/` prefix
 
