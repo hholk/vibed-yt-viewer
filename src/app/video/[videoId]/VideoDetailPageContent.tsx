@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Video, VideoListItem } from '@/lib/nocodb';
 import { updateVideo, deleteVideo } from '@/lib/nocodb';
@@ -101,6 +101,10 @@ interface DetailItemProps {
   isImage?: boolean;
   isMarkdown?: boolean;
   isInitiallyCollapsed?: boolean;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
 }
 
 const DetailItem = React.memo<DetailItemProps>(({ 
@@ -300,9 +304,30 @@ const DetailItem = React.memo<DetailItemProps>(({
     return null;
   }
 
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    let text = '';
+    if (typeof value === 'string') {
+      text = value;
+    } else if (Array.isArray(value)) {
+      text = value.join('\n');
+    } else if (value) {
+      text = JSON.stringify(value, null, 2);
+    }
+    if (text) {
+      navigator.clipboard.writeText(text);
+    }
+  };
+
   return (
-    <div className="mb-3 last:mb-0 bg-neutral-800/50 p-3 rounded-lg shadow-sm">
-      <button 
+    <div
+      className={`mb-3 last:mb-0 bg-neutral-800/50 p-3 rounded-lg shadow-sm ${draggable ? 'cursor-move' : ''}`}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <button
         onClick={toggleCollapse}
         className="w-full flex justify-between items-center cursor-pointer list-none p-0 bg-transparent border-none"
         aria-expanded={!isCollapsed}
@@ -310,7 +335,10 @@ const DetailItem = React.memo<DetailItemProps>(({
         <span className="text-xs font-medium text-neutral-400 hover:text-neutral-300 transition-colors">
           {formatFieldName(label)}
         </span>
-        <div className="text-neutral-500 hover:text-neutral-300 transition-colors">
+        <div className="flex items-center space-x-2 text-neutral-500 hover:text-neutral-300 transition-colors">
+          {isMarkdown && (
+            <Copy className="h-4 w-4" onClick={handleCopy} />
+          )}
           {isCollapsed ? (
             <ChevronRight className="h-4 w-4" />
           ) : (
@@ -517,17 +545,18 @@ export function VideoDetailPageContent({
   
 
   
-  const detailFieldOrder: (keyof Video)[] = [
+  const DEFAULT_FIELD_ORDER: (keyof Video)[] = [
     'ThumbHigh',
     'URL',
-    'ActionableAdvice',
+    'MainTopic',
     'TLDR',
     'MainSummary',
+    'KeyExamples',
+    'KeyNumbersData',
+    'ActionableAdvice',
     'DetailedNarrativeFlow',
     'MemorableQuotes',
     'MemorableTakeaways',
-    'KeyNumbersData',
-    'KeyExamples',
     'BookMediaRecommendations',
     'RelatedURLs',
     'VideoGenre',
@@ -541,7 +570,6 @@ export function VideoDetailPageContent({
     'EventsFairs',
     'DOIs',
     'Hashtags',
-    'MainTopic',
     'PrimarySources',
     'Sentiment',
     'SentimentReason',
@@ -550,6 +578,61 @@ export function VideoDetailPageContent({
     'Speaker',
     'Transcript'
   ];
+
+  const [fieldOrder, setFieldOrder] = useState<(keyof Video)[]>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('detailFieldOrder');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            return parsed as (keyof Video)[];
+          }
+        } catch {}
+      }
+    }
+    return DEFAULT_FIELD_ORDER;
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('detailFieldOrder', JSON.stringify(fieldOrder));
+    }
+  }, [fieldOrder]);
+
+  const dragFieldRef = useRef<keyof Video | null>(null);
+
+  const handleDragStart = useCallback(
+    (field: keyof Video) => (e: React.DragEvent<HTMLDivElement>) => {
+      dragFieldRef.current = field;
+      e.dataTransfer.effectAllowed = 'move';
+    },
+    []
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  }, []);
+
+  const handleDrop = useCallback(
+    (field: keyof Video) => (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      if (!dragFieldRef.current || dragFieldRef.current === field) return;
+      const dragged = dragFieldRef.current;
+      setFieldOrder(prev => {
+        const newOrder = [...prev];
+        const fromIndex = newOrder.indexOf(dragged);
+        const toIndex = newOrder.indexOf(field);
+        if (fromIndex >= 0 && toIndex >= 0) {
+          newOrder.splice(fromIndex, 1);
+          newOrder.splice(toIndex, 0, dragged);
+        }
+        return newOrder;
+      });
+      dragFieldRef.current = null;
+    },
+    []
+  );
   
   // Get channel info if it exists
   const channelInfo = currentVideo.Channel ? {
@@ -636,8 +719,8 @@ export function VideoDetailPageContent({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {}
           <div className="md:col-span-2 space-y-4">
-            {detailFieldOrder.map((fieldKey: keyof Video) => {
-              let value = currentVideo[fieldKey]; 
+            {fieldOrder.map((fieldKey: keyof Video) => {
+              let value = currentVideo[fieldKey];
               const label = formatFieldName(String(fieldKey));
 
               
@@ -671,6 +754,10 @@ export function VideoDetailPageContent({
                   isMarkdown={isMd}
                   isImage={isImg}
                   isLink={isLnk}
+                  draggable
+                  onDragStart={handleDragStart(fieldKey)}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop(fieldKey)}
                 />
               );
             })}
