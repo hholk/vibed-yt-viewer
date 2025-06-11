@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy } from 'lucide-react';
+import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy, Trash2, XCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Video, VideoListItem } from '@/lib/nocodb';
 import { updateVideo, deleteVideo } from '@/lib/nocodb';
@@ -113,7 +113,11 @@ const DetailItem = React.memo<DetailItemProps>(({
   isLink = false,
   isImage = false,
   isMarkdown = false,
-  isInitiallyCollapsed
+  isInitiallyCollapsed,
+  draggable = false,
+  onDragStart,
+  onDragOver,
+  onDrop
 }) => {
   
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
@@ -371,6 +375,7 @@ export function VideoDetailPageContent({
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDangerZoneOpen, setIsDangerZoneOpen] = useState(false);
 
   // Handler to clear DetailedNarrativeFlow
   const handleClearNarrative = async () => {
@@ -379,8 +384,7 @@ export function VideoDetailPageContent({
     setSaveError(null);
     try {
       await updateVideo(currentVideo.Id, { DetailedNarrativeFlow: null });
-      setCurrentVideo(prev => prev ? { ...prev, DetailedNarrativeFlow: null } : null);
-      alert('Narrative cleared successfully!');
+      setCurrentVideo(prev => ({ ...prev!, DetailedNarrativeFlow: null })); // No alert, UI will update
     } catch (error) {
       console.error('Failed to clear narrative:', error);
       setSaveError(error instanceof Error ? error.message : 'Failed to clear narrative.');
@@ -399,7 +403,7 @@ export function VideoDetailPageContent({
     setSaveError(null);
     try {
       await deleteVideo(currentVideo.Id);
-      alert('Video deleted successfully.');
+      // No alert, will redirect
       router.push('/');
     } catch (error) {
       console.error('Failed to delete video:', error);
@@ -654,29 +658,7 @@ export function VideoDetailPageContent({
   return (
     <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
       <div className="container mx-auto max-w-5xl">
-        {/* Narrative clear button in right column, visible if narrative exists */}
-        {currentVideo?.Id && (
-          <div className="fixed top-24 right-8 z-20 space-y-2">
-            {currentVideo.DetailedNarrativeFlow && (
-              <button
-                onClick={handleClearNarrative}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 shadow-md transition-colors"
-                aria-label="Clear Narrative"
-                disabled={isSaving}
-              >
-                {isSaving ? 'Clearing...' : 'Clear Narrative'}
-              </button>
-            )}
-            <button
-              onClick={handleDeleteVideo}
-              className="px-4 py-2 bg-red-700 text-white rounded hover:bg-red-800 shadow-md transition-colors"
-              aria-label="Delete Video"
-              disabled={isDeleting}
-            >
-              {isDeleting ? 'Deleting...' : 'Delete Video'}
-            </button>
-          </div>
-        )}
+
         <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
           <Link href={`/?sort=${searchParams.get('sort') || '-CreatedAt'}`} className="flex items-center text-blue-400 hover:text-blue-300 transition-colors group">
             <ArrowLeft size={18} className="mr-2 group-hover:-translate-x-1 transition-transform duration-200" />
@@ -848,6 +830,45 @@ export function VideoDetailPageContent({
                 ) : (
                   <p className="text-sm text-neutral-400 italic">No personal note added yet.</p>
                 )
+              )}
+            </div>
+
+            {/* Advanced Actions (Danger Zone) */}
+            <div className="mt-4 pt-4 border-t border-neutral-700/60">
+              <button
+                onClick={() => setIsDangerZoneOpen(!isDangerZoneOpen)}
+                className="w-full flex justify-between items-center py-2 text-sm font-medium text-neutral-400 hover:text-neutral-200 transition-colors"
+                aria-expanded={isDangerZoneOpen}
+              >
+                <span className="flex items-center">
+                  <AlertTriangle size={16} className="mr-2 text-yellow-500" />
+                  Advanced Actions
+                </span>
+                {isDangerZoneOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+              </button>
+              {isDangerZoneOpen && (
+                <div className="mt-3 space-y-3">
+                  {currentVideo.DetailedNarrativeFlow && (
+                    <button
+                      onClick={handleClearNarrative}
+                      className="w-full flex items-center justify-center px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      aria-label="Clear Narrative"
+                      disabled={isSaving || isDeleting}
+                    >
+                      <XCircle size={16} className="mr-2" />
+                      {isSaving && !isDeleting ? 'Clearing Narrative...' : 'Clear Narrative'}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleDeleteVideo}
+                    className="w-full flex items-center justify-center px-4 py-2 bg-red-700 text-white rounded hover:bg-red-800 shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    aria-label="Delete Video"
+                    disabled={isDeleting || isSaving}
+                  >
+                    <Trash2 size={16} className="mr-2" />
+                    {isDeleting ? 'Deleting Video...' : 'Delete Video'}
+                  </button>
+                </div>
               )}
             </div>
             
