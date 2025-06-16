@@ -5,7 +5,10 @@ import { VideoDetailPageContent } from './VideoDetailPageContent';
 
 interface VideoDetailPageProps {
   params: { videoId: string };
-  searchParams?: { [key: string]: string | string[] | undefined };
+  searchParams?: { 
+    sort?: string | string[];
+    [key: string]: string | string[] | undefined;
+  };
 }
 
 export async function generateMetadata({ params }: VideoDetailPageProps): Promise<Metadata> {
@@ -22,7 +25,10 @@ export async function generateMetadata({ params }: VideoDetailPageProps): Promis
   };
 }
 
-export default async function VideoDetailPage({ params, searchParams }: VideoDetailPageProps) {
+export default async function VideoDetailPage({ 
+  params, 
+  searchParams = { sort: '-CreatedAt' } 
+}: VideoDetailPageProps) {
   const { videoId } = params; // Corrected: No await for params
 
   // Fetch primary video data first to ensure an await before searchParams access
@@ -35,9 +41,11 @@ export default async function VideoDetailPage({ params, searchParams }: VideoDet
     notFound();
   }
 
-  // Now that an await has occurred (for fetchVideoByVideoId), we can safely access searchParams
-  const sortParam = searchParams?.sort;
-  const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt';
+  // Get sort parameter with type safety
+  const sortParam = Array.isArray(searchParams.sort) 
+    ? searchParams.sort[0] 
+    : searchParams.sort;
+  const currentSort = sortParam || '-CreatedAt';
 
   // Then fetch the list that depends on the sort order
   // Note: 'video' will be defined here due to the notFound() check above.
