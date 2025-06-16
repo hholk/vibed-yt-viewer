@@ -26,10 +26,15 @@ export async function generateMetadata({ params }: VideoDetailPageProps): Promis
 }
 
 export default async function VideoDetailPage({ 
-  params, 
-  searchParams = { sort: '-CreatedAt' } 
+  params: paramsProp, 
+  searchParams: searchParamsProp = { sort: '-CreatedAt' } 
 }: VideoDetailPageProps) {
-  const { videoId } = params; // Corrected: No await for params
+  // Ensure both params and searchParams are resolved
+  const [params, searchParams] = await Promise.all([
+    Promise.resolve(paramsProp),
+    Promise.resolve(searchParamsProp)
+  ]);
+  const { videoId } = params;
 
   // Fetch primary video data first to ensure an await before searchParams access
   const video = await fetchVideoByVideoId(videoId);
