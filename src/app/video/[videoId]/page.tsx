@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
-import { fetchVideoByVideoId, fetchAllVideos } from '@/lib/nocodb';
+import { fetchVideoByVideoId, fetchAllVideos, videoListItemSchema } from '@/lib/nocodb';
+import type { FilterOption } from '@/lib/filterVideos';
+import { filterVideos } from '@/lib/filterVideos';
 import { notFound } from 'next/navigation';
 import { VideoDetailPageContent } from './VideoDetailPageContent';
 
@@ -25,9 +27,9 @@ export async function generateMetadata({ params }: VideoDetailPageProps): Promis
   };
 }
 
-export default async function VideoDetailPage({ 
-  params: paramsProp, 
-  searchParams: searchParamsProp = { sort: '-CreatedAt' } 
+export default async function VideoDetailPage({
+  params: paramsProp,
+  searchParams: searchParamsProp = { sort: '-CreatedAt' }
 }: VideoDetailPageProps) {
   // Ensure both params and searchParams are resolved
   const [params, searchParams] = await Promise.all([
@@ -56,41 +58,78 @@ export default async function VideoDetailPage({
   // Note: 'video' will be defined here due to the notFound() check above.
   const allVideoListItems = await fetchAllVideos({
     sort: currentSort,
-    fields: ['Id', 'VideoID', 'Title'], // Kept fields consistent with original
+    fields: [
+      'Id',
+      'Title',
+      'ThumbHigh',
+      'Channel',
+      'Description',
+      'VideoGenre',
+      'VideoID',
+      'Persons',
+      'Companies',
+      'Indicators',
+      'Trends',
+      'InvestableAssets',
+      'TickerSymbol',
+      'Institutions',
+      'EventsFairs',
+      'DOIs',
+      'Hashtags',
+      'MainTopic',
+      'PrimarySources',
+      'Sentiment',
+      'SentimentReason',
+      'TechnicalTerms',
+      'Speaker',
+    ],
+    schema: videoListItemSchema,
   });
 
-  // The if (!video) check was here, but it's now redundant as it's performed earlier.
-  
-  const validVideoListItems = Array.isArray(allVideoListItems) ? allVideoListItems : [];
+  // Build selected filters from query params
+  const filterValues = Array.isArray(searchParams.f)
+    ? searchParams.f
+    : searchParams.f
+      ? [searchParams.f]
+      : [];
+  const selectedFilters: FilterOption[] = filterValues
+    .map((p) => {
+      const [type, ...rest] = p.split(':');
+      const value = decodeURIComponent(rest.join(':'));
+      if (!type || !value) return null;
+      return { label: value, value, type } as FilterOption;
+    })
+    .filter(Boolean) as FilterOption[];
+
+  const filteredList = filterVideos(
+    Array.isArray(allVideoListItems) ? allVideoListItems : [],
+    selectedFilters
+  );
 
   
   
   
-  const currentVideoIndexInList = validVideoListItems.findIndex(item => item.VideoID === video.VideoID);
+  const currentVideoIndexInList = filteredList.findIndex(item => item.VideoID === video.VideoID);
 
   let previousVideoData: { Id: string; Title: string | null } | null = null;
   let nextVideoData: { Id: string; Title: string | null } | null = null;
 
   if (currentVideoIndexInList !== -1) {
-    const prevItem = currentVideoIndexInList > 0 ? validVideoListItems[currentVideoIndexInList - 1] : null;
-    const nextItem = currentVideoIndexInList < validVideoListItems.length - 1 ? validVideoListItems[currentVideoIndexInList + 1] : null;
+    const prevItem = currentVideoIndexInList > 0 ? filteredList[currentVideoIndexInList - 1] : null;
+    const nextItem = currentVideoIndexInList < filteredList.length - 1 ? filteredList[currentVideoIndexInList + 1] : null;
 
     if (prevItem?.VideoID) {
       previousVideoData = { Id: prevItem.VideoID, Title: prevItem.Title || null };
-      
-      fetchVideoByVideoId(prevItem.VideoID); 
     }
     if (nextItem?.VideoID) {
       nextVideoData = { Id: nextItem.VideoID, Title: nextItem.Title || null };
-      
-      fetchVideoByVideoId(nextItem.VideoID);
     }
   }
 
   return (
     <VideoDetailPageContent 
       video={video} 
-      allVideos={validVideoListItems} 
+      allVideos={filteredList}
       previousVideo={previousVideoData}
       nextVideo={nextVideoData}
     />

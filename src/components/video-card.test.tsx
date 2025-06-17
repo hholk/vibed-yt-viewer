@@ -36,4 +36,12 @@ describe('VideoCard', () => {
     const link = getByRole('link');
     expect(link).toHaveAttribute('href', '/video/abc123');
   });
+
+  it('honors custom href', () => {
+    const { getByRole } = render(
+      <VideoCard video={sample} href="/video/abc123?f=foo" />,
+    );
+    const link = getByRole('link');
+    expect(link).toHaveAttribute('href', '/video/abc123?f=foo');
+  });
 });
