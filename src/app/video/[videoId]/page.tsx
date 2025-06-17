@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { fetchVideoByVideoId, fetchAllVideos } from '@/lib/nocodb';
+import { fetchVideoByVideoId, fetchAllVideos, videoListItemSchema } from '@/lib/nocodb';
 import type { FilterOption } from '@/lib/filterVideos';
 import { filterVideos } from '@/lib/filterVideos';
 import { notFound } from 'next/navigation';
@@ -58,7 +58,32 @@ export default async function VideoDetailPage({
   // Note: 'video' will be defined here due to the notFound() check above.
   const allVideoListItems = await fetchAllVideos({
     sort: currentSort,
-    fields: ['Id', 'VideoID', 'Title'], // Kept fields consistent with original
+    fields: [
+      'Id',
+      'Title',
+      'ThumbHigh',
+      'Channel',
+      'Description',
+      'VideoGenre',
+      'VideoID',
+      'Persons',
+      'Companies',
+      'Indicators',
+      'Trends',
+      'InvestableAssets',
+      'TickerSymbol',
+      'Institutions',
+      'EventsFairs',
+      'DOIs',
+      'Hashtags',
+      'MainTopic',
+      'PrimarySources',
+      'Sentiment',
+      'SentimentReason',
+      'TechnicalTerms',
+      'Speaker',
+    ],
+    schema: videoListItemSchema,
   });
 
   // Build selected filters from query params
