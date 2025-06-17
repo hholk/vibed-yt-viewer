@@ -1,4 +1,5 @@
-vi.mock("next/image", () => ({ __esModule: true, default: (props: any) => (<img {...props} />) }));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+vi.mock("next/image", () => ({ __esModule: true, default: (props: any) => (<img {...props} alt={props.alt || ''} />) }));
 import { render } from '@testing-library/react';
 import { VideoCard } from './video-card';
 import type { VideoListItem } from '@/lib/nocodb';
