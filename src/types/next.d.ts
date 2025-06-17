@@ -62,7 +62,9 @@ declare namespace NodeJS {
   interface ProcessEnv {
     NODE_ENV: 'development' | 'production' | 'test';
     NC_URL?: string;
+    NOCODB_URL?: string;
     NC_TOKEN?: string;
+    NOCODB_AUTH_TOKEN?: string;
     NC_PROJECT_ID?: string;
     NOCODB_PROJECT_ID?: string;
     NOCODB_TABLE_NAME?: string;
