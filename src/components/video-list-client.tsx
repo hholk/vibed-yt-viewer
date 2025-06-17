@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { SortDropdown } from './sort-dropdown';
 import { VideoCard } from './video-card';
 import { Badge } from '@/components/ui/badge';
 import type { VideoListItem } from '@/lib/nocodb';
 import { X } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import type { FilterOption } from '@/types/filters';
+import { serializeFilters, deserializeFilters, filterVideosByOptions } from '@/lib/utils';
 
 interface VideoListClientProps {
   videos: (VideoListItem & {
@@ -17,33 +20,14 @@ interface VideoListClientProps {
   })[];
 }
 
-interface FilterOption {
-  label: string;
-  value: string;
-  type:
-    | 'person'
-    | 'company'
-    | 'genre'
-    | 'indicator'
-    | 'trend'
-    | 'asset'
-    | 'ticker'
-    | 'institution'
-    | 'event'
-    | 'doi'
-    | 'hashtag'
-    | 'mainTopic'
-    | 'primarySource'
-    | 'sentiment'
-    | 'sentimentReason'
-    | 'channel'
-    | 'description'
-    | 'technicalTerm'
-    | 'speaker';
-}
 
 export function VideoListClient({ videos }: VideoListClientProps) {
-  const [selectedFilters, setSelectedFilters] = useState<FilterOption[]>([]);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const [selectedFilters, setSelectedFilters] = useState<FilterOption[]>(() =>
+    deserializeFilters(searchParams.get('filters')).map((f) => ({ ...f, label: f.value }))
+  );
   const [searchTerm, setSearchTerm] = useState('');
 
   const allOptions = useMemo<FilterOption[]>(() => {
@@ -162,70 +146,18 @@ export function VideoListClient({ videos }: VideoListClientProps) {
   }, [allOptions, selectedFilters, searchTerm]);
 
   const filteredVideos = useMemo(() => {
-    if (selectedFilters.length === 0) return videos;
-    return videos.filter((v) => {
-      return selectedFilters.every((f) => {
-        if (f.type === 'person') {
-          return v.Persons?.some((p) => (typeof p === 'string' ? p : p?.Title || p?.name) === f.value);
-        }
-        if (f.type === 'company') {
-          return v.Companies?.some((c) => (typeof c === 'string' ? c : c?.Title || c?.name) === f.value);
-        }
-        if (f.type === 'genre') {
-          return v.VideoGenre === f.value;
-        }
-        if (f.type === 'indicator') {
-          return v.Indicators?.some((i) => (typeof i === 'string' ? i : i?.Title || i?.name) === f.value);
-        }
-        if (f.type === 'trend') {
-          return v.Trends?.some((t) => (typeof t === 'string' ? t : t?.Title || t?.name) === f.value);
-        }
-        if (f.type === 'asset') {
-          return v.InvestableAssets?.includes(f.value);
-        }
-        if (f.type === 'ticker') {
-          return v.TickerSymbol === f.value;
-        }
-        if (f.type === 'institution') {
-          return v.Institutions?.some((inst) => (typeof inst === 'string' ? inst : inst?.Title || inst?.name) === f.value);
-        }
-        if (f.type === 'event') {
-          return v.EventsFairs?.includes(f.value);
-        }
-        if (f.type === 'doi') {
-          return v.DOIs?.includes(f.value);
-        }
-        if (f.type === 'hashtag') {
-          return v.Hashtags?.includes(f.value);
-        }
-        if (f.type === 'mainTopic') {
-          return v.MainTopic === f.value;
-        }
-        if (f.type === 'primarySource') {
-          return v.PrimarySources?.includes(f.value);
-        }
-        if (f.type === 'sentiment') {
-          return String(v.Sentiment ?? '') === f.value;
-        }
-        if (f.type === 'sentimentReason') {
-          return v.SentimentReason === f.value;
-        }
-        if (f.type === 'channel') {
-          return v.Channel === f.value;
-        }
-        if (f.type === 'description') {
-          return v.Description === f.value;
-        }
-        if (f.type === 'technicalTerm') {
-          return v.TechnicalTerms?.includes(f.value);
-        }
-        if (f.type === 'speaker') {
-          return v.Speaker === f.value;
-        }
-        return true;
-      });
-    });
+    return filterVideosByOptions(videos, selectedFilters);
   }, [videos, selectedFilters]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (selectedFilters.length > 0) {
+      params.set('filters', serializeFilters(selectedFilters));
+    } else {
+      params.delete('filters');
+    }
+    router.replace(`?${params.toString()}`);
+  }, [selectedFilters, router, searchParams]);
 
   const addFilter = (opt: FilterOption) => {
     setSelectedFilters((prev) => [...prev, opt]);
@@ -278,7 +210,12 @@ export function VideoListClient({ videos }: VideoListClientProps) {
       </div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
         {filteredVideos.map((video, index) => (
-          <VideoCard key={video.Id} video={video} priority={index === 0} />
+          <VideoCard
+            key={video.Id}
+            video={video}
+            priority={index === 0}
+            query={searchParams.toString()}
+          />
         ))}
       </div>
     </div>

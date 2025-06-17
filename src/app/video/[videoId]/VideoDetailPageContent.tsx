@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -9,6 +9,8 @@ import ReactMarkdown from 'react-markdown';
 import type { Video, VideoListItem } from '@/lib/nocodb';
 import { updateVideo, deleteVideo } from '@/lib/nocodb';
 import { StarRating } from '@/components/StarRating';
+import type { FilterOption } from '@/types/filters';
+import { deserializeFilters, filterVideosByOptions } from '@/lib/utils';
 
 export type { Video, VideoListItem } from '@/lib/nocodb';
 
@@ -69,9 +71,7 @@ type FieldValue = string | number | boolean | Date | string[] | Record<string, u
 
 interface VideoDetailPageContentProps {
   video: Video;
-  allVideos: VideoListItem[]; 
-  previousVideo?: { Id: string; Title: string | null } | null;
-  nextVideo?: { Id: string; Title: string | null } | null;
+  allVideos: VideoListItem[];
 }
 
 const formatFieldName = (fieldName: string): string => {
@@ -361,14 +361,34 @@ const DetailItem = React.memo<DetailItemProps>(({
 
 DetailItem.displayName = 'DetailItem';
 
-export function VideoDetailPageContent({
-  video,
-  
-  previousVideo,
-  nextVideo,
-}: VideoDetailPageContentProps) {
+export function VideoDetailPageContent({ video, allVideos }: VideoDetailPageContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const filters = useMemo<Pick<FilterOption, 'type' | 'value'>[]>(
+    () => deserializeFilters(searchParams.get('filters')),
+    [searchParams]
+  );
+
+  const filteredVideos = useMemo(
+    () => filterVideosByOptions(allVideos, filters),
+    [allVideos, filters]
+  );
+
+  const currentIndex = useMemo(
+    () => filteredVideos.findIndex((v) => v.VideoID === video.VideoID),
+    [filteredVideos, video.VideoID]
+  );
+
+  const previousVideo = useMemo(
+    () => (currentIndex > 0 ? filteredVideos[currentIndex - 1] : null),
+    [filteredVideos, currentIndex]
+  );
+
+  const nextVideo = useMemo(
+    () => (currentIndex >= 0 && currentIndex < filteredVideos.length - 1 ? filteredVideos[currentIndex + 1] : null),
+    [filteredVideos, currentIndex]
+  );
   const [currentVideo, setCurrentVideo] = useState<Video>(video);
   const [isEditingComment, setIsEditingComment] = useState(false);
   const [personalComment, setPersonalComment] = useState(video.PersonalComment || '');
