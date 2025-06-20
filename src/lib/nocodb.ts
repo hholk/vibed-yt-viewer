@@ -11,6 +11,7 @@
 import axios from 'axios';
 import { z } from 'zod';
 import { NocoDBRequestError, NocoDBValidationError } from './errors';
+import { getFromCache, setInCache, deleteFromCache } from './cache';
 
 /** Configuration options required to connect to NocoDB */
 export interface NocoDBConfig {
@@ -58,37 +59,6 @@ export function getNocoDBConfig(overrides: Partial<NocoDBConfig> = {}): NocoDBCo
   return { url, token, projectId, tableName, tableId, sourceAlias };
 }
 
-/**
- * In-memory cache for video data to prevent redundant API calls
- * Key: Cache key (string)
- * Value: { data: unknown, timestamp: number }
- */
-const videoCache = new Map<string, { data: unknown; timestamp: number }>();
-
-// Cache TTL in milliseconds (5 minutes)
-const CACHE_TTL_MS = 5 * 60 * 1000;
-
-// Helper function to get a cached video list
-function getCachedVideoList<T>(key: string): T[] | null {
-  const cached = videoCache.get(key);
-  if (!cached) return null;
-  if (Date.now() - cached.timestamp > CACHE_TTL_MS) {
-    videoCache.delete(key);
-    return null;
-  }
-  return cached.data as T[];
-}
-
-// Helper function to get a cached video by ID
-function getCachedVideo<T>(videoId: string): T | null {
-  const cached = videoCache.get(videoId);
-  if (!cached) return null;
-  if (Date.now() - cached.timestamp > CACHE_TTL_MS) {
-    videoCache.delete(videoId);
-    return null;
-  }
-  return cached.data as T;
-}
 
 /**
  * Transforms empty objects to null for cleaner data handling
@@ -522,17 +492,11 @@ export async function updateVideo(
 
     // Update the cache with the new data
     const updatedVideo = parsed.data;
-    videoCache.set(updatedVideo.VideoID, {
-      data: updatedVideo,
-      timestamp: Date.now()
-    });
+    setInCache(updatedVideo.VideoID, updatedVideo);
     
     // Also cache by numeric ID if available
     if (updatedVideo.Id) {
-      videoCache.set(updatedVideo.Id.toString(), {
-        data: updatedVideo,
-        timestamp: Date.now()
-      });
+      setInCache(updatedVideo.Id.toString(), updatedVideo);
     }
     
     return updatedVideo;
@@ -629,9 +593,9 @@ export async function deleteVideo(
   try {
     await apiClient.delete(requestUrl, { headers: { 'xc-token': token } });
 
-    videoCache.delete(recordIdOrVideoId.toString());
+    deleteFromCache(recordIdOrVideoId.toString());
     if (typeof recordIdOrVideoId === 'string' && !/^\d+$/.test(recordIdOrVideoId)) {
-      videoCache.delete(recordIdOrVideoId);
+      deleteFromCache(recordIdOrVideoId);
     }
   } catch (error: unknown) {
     let errorMessage = 'Unknown error';
@@ -874,7 +838,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
  */
 export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: string, ncTableNameParam?: string): Promise<Video | null> {
   // Get cached video if available
-  const cached = getCachedVideo<Video>(videoId);
+  const cached = getFromCache<Video>(videoId);
   if (cached) {
     return cached;
   }
@@ -927,10 +891,7 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
     }
 
     // Cache the result
-    videoCache.set(videoId, {
-      data: parsedVideo.data,
-      timestamp: Date.now()
-    });
+    setInCache(videoId, parsedVideo.data);
 
     return parsedVideo.data;
   } catch (error: unknown) {
@@ -1040,7 +1001,7 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
     project: options?.ncProjectId,
     table: options?.ncTableName,
   });
-  const cached = getCachedVideoList<z.infer<T>>(cacheKey);
+  const cached = getFromCache<z.infer<T>[]>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -1094,10 +1055,7 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
   }
 
   // Cache the results
-  videoCache.set(cacheKey, { 
-    data: allItems, 
-    timestamp: Date.now() 
-  });
+  setInCache(cacheKey, allItems);
 
   return allItems;
 }
