@@ -13,6 +13,30 @@ import { z } from 'zod';
 import { NocoDBRequestError, NocoDBValidationError } from './errors';
 import { getFromCache, setInCache, deleteFromCache } from './cache';
 
+/** Helper to format axios errors consistently */
+function createRequestError(prefix: string, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return new NocoDBRequestError(
+    `${prefix}: ${message}`,
+    axios.isAxiosError(error) ? error.response?.status : undefined,
+    axios.isAxiosError(error) ? error.response?.data : undefined,
+  );
+}
+
+/** Resolve numeric record ID from numeric or VideoID value */
+export async function resolveNumericId(
+  idOrVideoId: number | string,
+  ncProjectId?: string,
+  ncTableName?: string,
+): Promise<number> {
+  if (typeof idOrVideoId === 'number') return idOrVideoId;
+  const asNum = Number(idOrVideoId);
+  if (!isNaN(asNum) && Number.isInteger(asNum)) return asNum;
+  const video = await fetchVideoByVideoId(String(idOrVideoId), ncProjectId, ncTableName);
+  if (!video) throw new Error(`No video found with VideoID: ${idOrVideoId}`);
+  return video.Id;
+}
+
 /** Configuration options required to connect to NocoDB */
 export interface NocoDBConfig {
   url: string;
@@ -396,44 +420,6 @@ export async function updateVideo(
   ncProjectIdParam?: string,
   ncTableNameParam?: string
 ): Promise<Video> {
-  /**
-   * Helper to resolve a numeric ID from either a direct ID or a VideoID string
-   * @param idOrVideoId - Either a numeric ID or a VideoID string
-   * @param ncProjectId - Optional project ID override
-   * @param ncTableName - Optional table name override
-   * @returns The resolved numeric ID
-   * @throws Error if the ID cannot be resolved
-   */
-  /**
-   * Resolves a record's numeric primary key from either a numeric ID or the
-   * human readable `VideoID` field. When given a string that cannot be parsed
-   * as a number the function performs a lookup using `fetchVideoByVideoId`.
-   */
-  async function resolveNumericId(
-    idOrVideoId: number | string,
-    ncProjectId?: string,
-    ncTableName?: string
-  ): Promise<number> {
-    // If it's already a number, return it
-    if (typeof idOrVideoId === 'number') return idOrVideoId;
-    
-    // Try to parse as number (in case it's a stringified number)
-    const asNum = Number(idOrVideoId);
-    if (!isNaN(asNum) && Number.isInteger(asNum)) return asNum;
-    
-    // Try to find the video by VideoID
-    try {
-      const video = await fetchVideoByVideoId(idOrVideoId, ncProjectId, ncTableName);
-      if (!video) {
-        throw new Error(`No video found with VideoID: ${idOrVideoId}`);
-      }
-      return video.Id;
-    } catch (error: unknown) {
-      console.error(`Error resolving numeric ID for ${idOrVideoId}:`, error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to resolve numeric ID for ${idOrVideoId}: ${errorMessage}`);
-    }
-  }
   const { url: ncUrl, token, projectId, tableName, tableId } = getNocoDBConfig({
     projectId: ncProjectIdParam,
     tableName: ncTableNameParam,
@@ -501,43 +487,11 @@ export async function updateVideo(
     
     return updatedVideo;
   } catch (error: unknown) {
-    // Handle any errors that occur during the request
-    let errorMessage = 'Unknown error';
-    let statusCode: number | undefined;
-    let errorData: unknown = undefined;
-
-    if (axios.isAxiosError(error)) {
-      errorMessage = error.message;
-      statusCode = error.response?.status;
-      errorData = error.response?.data;
-      
-      if (error.response) {
-        console.error('NocoDB API error response:', {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data,
-          headers: error.response.headers,
-        });
-      } else if (error.request) {
-        console.error('No response received from NocoDB API');
-      }
-    } else if (error instanceof Error) {
-      errorMessage = error.message;
-    } else if (typeof error === 'string') {
-      errorMessage = error;
-    }
-
-    console.error(`Error updating video record ${recordIdOrVideoId}:`, errorMessage);
-    
     if (error instanceof NocoDBValidationError) {
       throw error;
     }
-    
-    throw new NocoDBRequestError(
-      `Failed to update video record: ${errorMessage}`,
-      statusCode,
-      errorData
-    );
+    console.error(`Error updating video record ${recordIdOrVideoId}:`, error);
+    throw createRequestError('Failed to update video record', error);
   }
 }
 
@@ -552,26 +506,6 @@ export async function deleteVideo(
   ncProjectIdParam?: string,
   ncTableNameParam?: string
 ): Promise<void> {
-  async function resolveNumericId(
-    idOrVideoId: number | string,
-    ncProjectId?: string,
-    ncTableName?: string
-  ): Promise<number> {
-    if (typeof idOrVideoId === 'number') return idOrVideoId;
-    const asNum = Number(idOrVideoId);
-    if (!isNaN(asNum) && Number.isInteger(asNum)) return asNum;
-    try {
-      const video = await fetchVideoByVideoId(idOrVideoId, ncProjectId, ncTableName);
-      if (!video) {
-        throw new Error(`No video found with VideoID: ${idOrVideoId}`);
-      }
-      return video.Id;
-    } catch (error: unknown) {
-      console.error(`Error resolving numeric ID for ${idOrVideoId}:`, error);
-      const msg = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to resolve numeric ID for ${idOrVideoId}: ${msg}`);
-    }
-  }
 
   const { url, token, projectId, tableName, tableId } = getNocoDBConfig({
     projectId: ncProjectIdParam,
@@ -598,28 +532,8 @@ export async function deleteVideo(
       deleteFromCache(recordIdOrVideoId);
     }
   } catch (error: unknown) {
-    let errorMessage = 'Unknown error';
-    if (axios.isAxiosError(error)) {
-      if (error.response) {
-        errorMessage = `Status: ${error.response.status} - ${JSON.stringify(error.response.data)}`;
-        console.error('Error response data:', error.response.data);
-      } else if (error.request) {
-        errorMessage = 'No response received from server';
-      } else {
-        errorMessage = `Request setup error: ${error.message}`;
-      }
-    } else if (error instanceof Error) {
-      errorMessage = error.message;
-    } else if (typeof error === 'string') {
-      errorMessage = error;
-    }
-    
-    console.error(`Error deleting video record ${recordIdOrVideoId}:`, errorMessage);
-    throw new NocoDBRequestError(
-      `Failed to delete video record: ${errorMessage}`,
-      axios.isAxiosError(error) ? error.response?.status : undefined,
-      axios.isAxiosError(error) ? error.response?.data : undefined
-    );
+    console.error(`Error deleting video record ${recordIdOrVideoId}:`, error);
+    throw createRequestError('Failed to delete video record', error);
   }
 }
 
