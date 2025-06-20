@@ -6,8 +6,15 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { type Video } from '@/lib/nocodb'; 
-import { Badge } from '@/components/ui/badge';
-import { Star, ArrowLeftCircle, ArrowRightCircle } from 'lucide-react';
+import { ArrowLeftCircle, ArrowRightCircle } from 'lucide-react';
+import {
+  renderBadgeList,
+  renderDetailItem,
+  renderStarRating,
+  renderStringList,
+  renderUrlList,
+  formatDate
+} from './render-utils';
 
 export type NavVideo = {
   Id: number;
@@ -25,87 +32,6 @@ interface VideoDetailClientViewProps {
   currentSort: string;
 }
 
-const renderBadgeList = (
-  items: (string | { Title?: string | null; name?: string | null } | undefined)[] | null | undefined,
-  label: string,
-  variant: 'secondary' | 'outline' = 'secondary'
-) => {
-  if (!items || items.length === 0) return null;
-  const validItems = items.filter(item => item && (typeof item === 'string' || item.Title || item.name));
-  if (validItems.length === 0) return null;
-
-  return (
-    <div className="mb-4">
-      <h3 className="text-md font-semibold text-muted-foreground mb-1.5">{label}</h3>
-      <div className="flex flex-wrap gap-1">
-        {validItems.map((item, index) => {
-          
-          const content = typeof item === 'string' ? item : (item?.Title || item?.name || '');
-          return (
-            <Badge key={index} variant={variant}>
-              {content}
-            </Badge>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-const renderDetailItem = (label: string, value: React.ReactNode | string | number | null | undefined, className?: string) => {
-  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
-  return (
-    <div className={`mb-4 ${className}`}>
-      <h3 className="text-md font-semibold text-muted-foreground mb-0.5">{label}</h3>
-      {typeof value === 'string' || typeof value === 'number' ? <p className="text-base text-foreground whitespace-pre-wrap">{value}</p> : value}
-    </div>
-  );
-};
-
-const renderStarRating = (rating: number | null | undefined) => {
-  if (rating === null || rating === undefined) return renderDetailItem("Importance Rating", "Not Rated");
-  return (
-    <div className="mb-4">
-      <h3 className="text-md font-semibold text-muted-foreground mb-0.5">Importance Rating</h3>
-      <div className="flex items-center">
-        {[...Array(5)].map((_, i) => (
-          <Star key={i} className={`h-5 w-5 ${i < rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
-        ))}
-        <span className="ml-2 text-sm text-foreground">({rating}/5)</span>
-      </div>
-    </div>
-  );
-};
-
-const renderStringList = (items: string[] | null | undefined, label: string) => {
-  if (!items || items.length === 0) return null;
-  return (
-    <div className="mb-4">
-      <h3 className="text-md font-semibold text-muted-foreground mb-1">{label}</h3>
-      <ul className="list-disc list-inside pl-2 space-y-0.5 text-base text-foreground">
-        {items.map((item, idx) => <li key={idx}>{item}</li>)}
-      </ul>
-    </div>
-  );
-};
-
-const renderUrlList = (items: string[] | null | undefined, label: string) => {
-  if (!items || items.length === 0) return null;
-  return (
-    <div className="mb-4">
-      <h3 className="text-md font-semibold text-muted-foreground mb-1">{label}</h3>
-      <ul className="list-disc list-inside pl-2 space-y-0.5 text-base text-foreground">
-        {items.map((url, idx) => (
-          <li key={idx}>
-            <a href={url} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline break-all">
-              {url}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-};
 
 export default function VideoDetailClientView({ video, allVideos, currentSort }: VideoDetailClientViewProps) {
   const router = useRouter();
@@ -141,10 +67,6 @@ export default function VideoDetailClientView({ video, allVideos, currentSort }:
     };
   }, [prevVideo, nextVideo, router, currentSort]);
 
-  const formatDate = (dateString: Date | string | null | undefined) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleString();
-  };
   
   return (
     <div className="container mx-auto px-2 py-4 md:px-4 relative">

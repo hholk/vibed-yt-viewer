@@ -150,3 +150,10 @@
   - Tests: CI pipeline should run green.
 - **Docs & Prompt Guide** (Task 12)
   - Ensure all documentation is up-to-date.
+
+## Refactoring Plan (Meta Standards)
+- [x] 1. Extract render helper functions from `video-detail-client-view.tsx` into `src/components/render-utils.tsx`.
+- [x] 2. Replace duplicated caching logic in `src/lib/nocodb.ts` with generic functions in `src/lib/cache.ts`.
+- [x] 3. Simplify filter option collection in `video-list-client.tsx` using a configuration-driven approach.
+- [x] 4. Update existing files to use new helpers without changing functionality.
+- [x] 5. Run and pass tests using `pnpm test`.
