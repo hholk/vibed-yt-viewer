@@ -60,37 +60,38 @@ export const renderStarRating = (rating: number | null | undefined) => {
   );
 };
 
-export const renderStringList = (items: string[] | null | undefined, label: string) => {
+export const renderList = (
+  items: string[] | null | undefined,
+  label: string,
+  itemRenderer: (item: string, idx: number) => React.ReactNode = (item) => item,
+) => {
   if (!items || items.length === 0) return null;
   return (
     <div className="mb-4">
       <h3 className="text-md font-semibold text-muted-foreground mb-1">{label}</h3>
       <ul className="list-disc list-inside pl-2 space-y-0.5 text-base text-foreground">
         {items.map((item, idx) => (
-          <li key={idx}>{item}</li>
+          <li key={idx}>{itemRenderer(item, idx)}</li>
         ))}
       </ul>
     </div>
   );
 };
 
-export const renderUrlList = (items: string[] | null | undefined, label: string) => {
-  if (!items || items.length === 0) return null;
-  return (
-    <div className="mb-4">
-      <h3 className="text-md font-semibold text-muted-foreground mb-1">{label}</h3>
-      <ul className="list-disc list-inside pl-2 space-y-0.5 text-base text-foreground">
-        {items.map((url, idx) => (
-          <li key={idx}>
-            <a href={url} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline break-all">
-              {url}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-};
+export const renderStringList = (items: string[] | null | undefined, label: string) =>
+  renderList(items, label);
+
+export const renderUrlList = (items: string[] | null | undefined, label: string) =>
+  renderList(items, label, (url) => (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-brand hover:underline break-all"
+    >
+      {url}
+    </a>
+  ));
 
 export const formatDate = (date: Date | string | null | undefined) => {
   if (!date) return 'N/A';

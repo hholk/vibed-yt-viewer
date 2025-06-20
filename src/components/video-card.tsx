@@ -2,20 +2,21 @@ import Link from 'next/link';
 import Image from 'next/image';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { VideoListItem } from '@/lib/nocodb'; 
+import type { VideoListItem } from '@/lib/nocodb';
 
 interface VideoCardProps {
-  video: VideoListItem; 
-  priority?: boolean; 
+  video: VideoListItem;
+  priority?: boolean;
 }
 
 export function VideoCard({ video, priority = false }: VideoCardProps) {
-  
-  const thumbnailUrl = video.ThumbHigh && typeof video.ThumbHigh === 'string' ? video.ThumbHigh : null;
+  const thumbnailUrl = typeof video.ThumbHigh === 'string' ? video.ThumbHigh : null;
 
   return (
-    
-    <Link href={`/video/${video.VideoID}`} passHref className="block hover:shadow-lg transition-shadow duration-200 rounded-lg h-full">
+    <Link
+      href={`/video/${video.VideoID}`}
+      className="block hover:shadow-lg transition-shadow duration-200 rounded-lg h-full"
+    >
       <Card className="w-full flex flex-col h-full bg-card text-card-foreground p-0">
         <CardHeader className="p-0 rounded-t-lg overflow-hidden">
           {thumbnailUrl ? (
@@ -35,26 +36,18 @@ export function VideoCard({ video, priority = false }: VideoCardProps) {
             </div>
           )}
         </CardHeader>
-        {}
-        <CardContent className="p-2 flex-grow flex flex-col justify-between -mt-px">
+        <CardContent className="p-2 flex flex-col justify-between flex-grow -mt-px">
           <div>
-            {}
             <CardTitle className="text-base font-semibold line-clamp-2 mb-0.5" title={video.Title}>
               {video.Title}
             </CardTitle>
             {video.Channel && (
-              
               <p className="text-xs text-muted-foreground truncate mb-0.5" title={video.Channel}>
                 {video.Channel}
               </p>
             )}
-            {} 
-            {} 
           </div>
-          {}
-          {}
         </CardContent>
-        {}
       </Card>
     </Link>
   );

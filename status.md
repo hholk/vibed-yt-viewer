@@ -162,3 +162,11 @@
 - [x] 8. Refactor `updateVideo` and `deleteVideo` to use these helpers.
 - [x] 9. Consolidate video filtering logic using a unified configuration.
 - [x] 10. Run `pnpm test` to ensure refactor maintains behavior.
+
+## Refactoring Plan (Meta Standards v2)
+- [x] Remove unused components (`VideoDetailPageClient.tsx`, `VideoDetailPageWrapper.tsx`) and obsolete `check-console-errors.js` script.
+- [x] Introduce `renderList` helper in `render-utils.tsx` to consolidate `renderStringList` and `renderUrlList`.
+- [x] Update existing list rendering functions to use the new helper.
+- [x] Simplify `VideoCard` component markup and remove unnecessary fragments.
+- [x] Ensure no references remain to removed files and run `pnpm test`.
+
