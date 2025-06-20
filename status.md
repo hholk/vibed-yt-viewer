@@ -1,7 +1,9 @@
 # Project Status
 
 ## Done
+
 - **5-Star Rating & Personal Comments**
+
   - Added interactive 5-star rating component for the `ImportanceRating` field
   - Implemented editable text area for `PersonalComment` with save functionality
   - Added auto-save functionality for both rating and comment fields
@@ -12,11 +14,10 @@
 
 - Markdown rendering for video detail page fields: Actionable Advice, TLDR, Main Summary, Key Numbers Data, Key Examples, Detailed Narrative Flow, Memorable Quotes, Memorable Takeaways (via react-markdown in [videoId]/page.tsx)
 
-
-*   **Fix NocoDB `Sentiment` field parsing (Error 1 & 4):**
-    *   **File:** `src/lib/nocodb.ts`
-    *   **Change:** Updated `videoSchema` for `Sentiment` from `z.string()` to `z.number()`.
-    *   **Reason:** To resolve Zod parsing error "Sentiment: Expected string, received number" as NocoDB returns this field as a number.
+* **Fix NocoDB `Sentiment` field parsing (Error 1 & 4):**
+  - **File:** `src/lib/nocodb.ts`
+  - **Change:** Updated `videoSchema` for `Sentiment` from `z.string()` to `z.number()`.
+  - **Reason:** To resolve Zod parsing error "Sentiment: Expected string, received number" as NocoDB returns this field as a number.
 
 - **Bootstrap Project (`create-next-app@latest` v15.3)**
   - Framework: Next.js 15.3
@@ -53,7 +54,7 @@
     - Optional text fields (`Channel`, `Description`, `PersonalComment`) and `ImportanceRating` now default to `null` if not present in API response, resolving test inconsistencies.
   - `fetchVideos` function to get and validate video records, dynamically reading environment variables (`NC_URL`, `NC_TOKEN`, `NOCODB_TABLE_NAME`).
   - Vitest tests (`src/lib/nocodb.test.ts`): All tests passing. Comprehensive mocking of Axios for various scenarios (success, API errors, invalid data structure, missing env vars). Tests confirm correct parsing of refined schema, including optional fields.
-   - Local NocoDB connection settings for development/testing: `NC_URL=http://nocodb:8080` (Docker network hostname), `projectId='phk8vxq6f1ev08h'` (hardcoded in `nocodb.ts`), `NC_TOKEN=<user_provided_token>`, `NOCODB_TABLE_NAME=youtubeTranscripts` (user to set these in `.env.local`).
+  - Local NocoDB connection settings for development/testing: `NC_URL=http://nocodb:8080` (Docker network hostname), `projectId='phk8vxq6f1ev08h'` (hardcoded in `nocodb.ts`), `NC_TOKEN=<user_provided_token>`, `NOCODB_TABLE_NAME=youtubeTranscripts` (user to set these in `.env.local`).
 - **NocoDB API Client (`src/lib/nocodb.ts`) String-to-Array Parsing Fix:**
   - Resolved Zod parsing errors where NocoDB API returned newline-separated strings for fields expected as arrays in `fetchVideoByVideoId`.
   - Introduced `stringToArrayOrNullPreprocessor`: Converts newline-separated strings to `string[]`, trims values, and handles empty/null inputs. Applied to fields like `MemorableQuotes`, `MemorableTakeaways`, `Hashtags`, `KeyExamples`, `InvestableAssets`, `PrimarySources`, `TechnicalTerms`.
@@ -74,7 +75,7 @@
 - **NocoDB `ThumbHigh` Parsing Fix (`src/lib/nocodb.ts`)**:
   - Resolved Zod parsing error: `ThumbHigh: Expected string, received array`.
   - Modified the `ThumbHigh` field definition within `videoSchema` to use `z.preprocess()`.
-  - This ensures the incoming array of NocoDB attachment objects is transformed to a single URL string (or `null`) *before* Zod validation, aligning the schema with the actual data structure and processing needs.
+  - This ensures the incoming array of NocoDB attachment objects is transformed to a single URL string (or `null`) _before_ Zod validation, aligning the schema with the actual data structure and processing needs.
   - Added `.describe()` to `videoSchema` and `videoListItemSchema` for clearer debugging.
 - **Video Detail Page & Navigation (Task 4.7)**
   - **Page Structure (`src/app/video/[videoId]/page.tsx`):**
@@ -94,11 +95,11 @@
     - `NavVideo` type in `VideoDetailClientView`: Adjusted to allow nullable fields (Title, Channel, etc.) to align with `navVideoSchema` and actual data, resolving type errors.
     - `videoSchema` in `nocodb.ts`: Corrected types for fields like `KeyNumbersData`, `KeyExamples` from array to string based on actual data content.
 - **Video Detail View & Schema Enhancement (Task 4.8)**
-  - **Schema Update (`src/lib/nocodb.ts` - `videoSchema`):
+  - \*\*Schema Update (`src/lib/nocodb.ts` - `videoSchema`):
     - Added new fields: `KeyNumbersData` (string), `KeyExamples` (string), `BookMediaRecommendations` (array of string), `RelatedURLs` (array of string/URL), `VideoGenre` (string), `Persons` (array of linked records), `InvestableAssets` (array of string), `TickerSymbol` (string), `Institutions` (array of linked records), `EventsFairs` (array of linked records), `DOIs` (array of string), `PrimarySources` (array of string), `Sentiment` (string), `SentimentReason` (string), `TechnicalTerms` (array of string).
     - Re-added `Companies` (array of linked records).
     - All new fields are optional and nullable.
-  - **Video Detail Page Implementation (`src/app/video/[videoId]/page.tsx`):
+  - \*\*Video Detail Page Implementation (`src/app/video/[videoId]/page.tsx`):
     - Implemented as a Next.js Server Component.
     - Features a "Back to Home" button with `ArrowLeft` icon.
     - Video `Title` displayed as `<h1>`, `VideoID` shown underneath.
@@ -152,6 +153,7 @@
   - Ensure all documentation is up-to-date.
 
 ## Refactoring Plan (Meta Standards)
+
 - [x] 1. Extract render helper functions from `video-detail-client-view.tsx` into `src/components/render-utils.tsx`.
 - [x] 2. Replace duplicated caching logic in `src/lib/nocodb.ts` with generic functions in `src/lib/cache.ts`.
 - [x] 3. Simplify filter option collection in `video-list-client.tsx` using a configuration-driven approach.
@@ -162,3 +164,10 @@
 - [x] 8. Refactor `updateVideo` and `deleteVideo` to use these helpers.
 - [x] 9. Consolidate video filtering logic using a unified configuration.
 - [x] 10. Run `pnpm test` to ensure refactor maintains behavior.
+
+## Current Refactor Tasks
+
+- [x] 1. Create helper to extract titles from linked record arrays and refactor `FILTER_GETTERS` in `video-list-client.tsx`.
+- [x] 2. Replace `isClient` logic in `sort-dropdown.tsx` with the existing `useMounted` hook.
+- [x] 3. Remove unused files `src/dummy.test.ts` and `prompt_task4_done.md`.
+- [x] 4. Run `npm test` to ensure all tests pass after refactor.
