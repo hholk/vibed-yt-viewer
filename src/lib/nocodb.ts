@@ -18,8 +18,7 @@ export interface NocoDBConfig {
   token: string;
   projectId: string;
   tableName: string;
-  tableId: string;
-  sourceAlias: string; // Added sourceAlias
+  tableId?: string;
 }
 
 /**
@@ -27,8 +26,18 @@ export interface NocoDBConfig {
  * overrides. Throws if the URL or token are missing.
  */
 export function getNocoDBConfig(overrides: Partial<NocoDBConfig> = {}): NocoDBConfig {
-  const url = overrides.url || process.env.NOCODB_URL || process.env.NC_URL;
-  const token = overrides.token || process.env.NOCODB_AUTH_TOKEN || process.env.NC_TOKEN;
+  const url =
+    overrides.url ||
+    process.env.NOCODB_URL ||
+    process.env.NEXT_PUBLIC_NOCODB_URL ||
+    process.env.NC_URL ||
+    process.env.NEXT_PUBLIC_NC_URL;
+  const token =
+    overrides.token ||
+    process.env.NOCODB_AUTH_TOKEN ||
+    process.env.NEXT_PUBLIC_NOCODB_AUTH_TOKEN ||
+    process.env.NC_TOKEN ||
+    process.env.NEXT_PUBLIC_NC_TOKEN;
   const projectId =
     overrides.projectId ||
     process.env.NC_PROJECT_ID || // Memory indicates NC_PROJECT_ID for .env
@@ -41,12 +50,8 @@ export function getNocoDBConfig(overrides: Partial<NocoDBConfig> = {}): NocoDBCo
     'youtubeTranscripts'; // Default
   const tableId =
     overrides.tableId ||
-    process.env.NOCODB_TABLE_ID ||
-    '';
-  const sourceAlias =
-    overrides.sourceAlias ||
-    process.env.NC_SOURCE_ALIAS ||
-    'noco'; // Default source alias
+    process.env.NC_TABLE_ID ||
+    process.env.NOCODB_TABLE_ID;
 
   if (!url) {
     throw new Error('NocoDB URL is not configured. Please set NOCODB_URL (or NC_URL) in your environment.');
@@ -55,7 +60,7 @@ export function getNocoDBConfig(overrides: Partial<NocoDBConfig> = {}): NocoDBCo
     throw new Error('NocoDB Auth Token is not configured. Please set NOCODB_AUTH_TOKEN (or NC_TOKEN) in your environment.');
   }
 
-  return { url, token, projectId, tableName, tableId, sourceAlias };
+  return { url, token, projectId, tableName, tableId };
 }
 
 /**
@@ -489,7 +494,9 @@ export async function updateVideo(
   }
 
   // Build the URL for the PATCH request
-  const requestUrl = `${ncUrl}/api/v2/tables/${tableId || tableName}/records/${numericId}`;
+  const requestUrl = tableId
+    ? `${ncUrl}/api/v2/tables/${tableId}/records/${numericId}`
+    : `${ncUrl}/api/v2/projects/${projectId}/tables/${tableName}/records/${numericId}`;
 
   console.log(`[updateVideo] PATCH to:`, requestUrl, 'with data:', updateData);
 
@@ -539,13 +546,13 @@ export async function updateVideo(
   } catch (error: unknown) {
     // Handle any errors that occur during the request
     let errorMessage = 'Unknown error';
-    let statusCode: number | undefined;
-    let errorData: unknown = undefined;
+    let _statusCode: number | undefined;
+    let _errorData: unknown = undefined;
 
     if (axios.isAxiosError(error)) {
       errorMessage = error.message;
-      statusCode = error.response?.status;
-      errorData = error.response?.data;
+      _statusCode = error.response?.status;
+      _errorData = error.response?.data;
       
       if (error.response) {
         console.error('NocoDB API error response:', {
@@ -571,8 +578,8 @@ export async function updateVideo(
     
     throw new NocoDBRequestError(
       `Failed to update video record: ${errorMessage}`,
-      statusCode,
-      errorData
+      _statusCode,
+      _errorData
     );
   }
 }
@@ -623,7 +630,9 @@ export async function deleteVideo(
     throw new Error(`Could not find video with ID: ${recordIdOrVideoId}`);
   }
 
-  const requestUrl = `${url}/api/v2/tables/${tableId || tableName}/records/${numericId}`;
+  const requestUrl = tableId
+    ? `${url}/api/v2/tables/${tableId}/records/${numericId}`
+    : `${url}/api/v2/projects/${projectId}/tables/${tableName}/records/${numericId}`;
   console.log('[deleteVideo] DELETE to:', requestUrl);
 
   try {
@@ -675,14 +684,6 @@ interface FetchVideosOptions<T extends z.ZodTypeAny> {
    */
   ncTableName?: string;
   /**
-   * Override for NocoDB table ID (v2 API)
-   */
-  ncTableId?: string;
-  /**
-   * Override for NocoDB table ID (v2 API)
-   */
-  ncTableId?: string;
-  /**
    * Optional search query string for tags.
    * Words in the string will be used to filter with 'ilike' on the Hashtags field.
    */
@@ -700,10 +701,9 @@ interface FetchVideosOptions<T extends z.ZodTypeAny> {
 export async function fetchVideos<T extends z.ZodTypeAny>(
   options?: FetchVideosOptions<T>
 ): Promise<{ videos: z.infer<T>[]; pageInfo: PageInfo }> {
-  const { url, token, projectId, tableName, tableId, sourceAlias } = getNocoDBConfig({
+  const { url, token, projectId, tableName, tableId } = getNocoDBConfig({
     projectId: options?.ncProjectId,
     tableName: options?.ncTableName,
-    tableId: options?.ncTableId,
   });
 
   /**
@@ -761,7 +761,9 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
     try {
       // First try with all requested fields
       response = await apiClient.get(
-        `${url}/api/v2/tables/${tableId || tableName}/records`,
+        tableId
+          ? `${url}/api/v2/tables/${tableId}/records`
+          : `${url}/api/v2/projects/${projectId}/tables/${tableName}/records`,
         {
           headers: { 'xc-token': token },
           params: {
@@ -784,7 +786,9 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
           );
           
           response = await apiClient.get(
-            `${url}/api/v2/tables/${tableId || tableName}/records`,
+            tableId
+              ? `${url}/api/v2/tables/${tableId}/records`
+              : `${url}/api/v2/projects/${projectId}/tables/${tableName}/records`,
             {
               headers: { 'xc-token': token },
               params: {
@@ -879,7 +883,7 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
     return cached;
   }
 
-  const { url, token, projectId, tableName, tableId, sourceAlias } = getNocoDBConfig({
+  const { url, token, projectId, tableName, tableId } = getNocoDBConfig({
     projectId: ncProjectIdParam,
     tableName: ncTableNameParam,
   });
@@ -888,7 +892,9 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
   try {
     // First try with all fields
     const response = await apiClient.get<NocoDBResponse<z.infer<typeof videoSchema>>>(
-      `${url}/api/v2/tables/${tableId || tableName}/records`,
+      tableId
+        ? `${url}/api/v2/tables/${tableId}/records`
+        : `${url}/api/v2/projects/${projectId}/tables/${tableName}/records`,
       {
         headers: { 'xc-token': token },
         params: {
@@ -936,13 +942,13 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
   } catch (error: unknown) {
     // Handle any errors that occur during the request
     let errorMessage = 'Unknown error';
-    let statusCode: number | undefined;
-    let errorData: unknown = undefined;
+    let _statusCode: number | undefined;
+    let _errorData: unknown = undefined;
 
     if (axios.isAxiosError(error)) {
       errorMessage = error.message;
-      statusCode = error.response?.status;
-      errorData = error.response?.data;
+      _statusCode = error.response?.status;
+      _errorData = error.response?.data;
       
       if (error.response) {
         console.error('NocoDB API error response:', {
@@ -975,11 +981,9 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
     }
     
     throw new NocoDBRequestError(
-      `Failed to fetch video (VideoID: ${videoId}) from NocoDB: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-      axios.isAxiosError(error) ? error.response?.status : undefined,
-      axios.isAxiosError(error) ? error.response?.data : undefined
+      `Failed to fetch video (VideoID: ${videoId}) from NocoDB: ${errorMessage}`,
+      _statusCode,
+      _errorData
     );
   }
 }
@@ -1053,7 +1057,6 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
     fields: options?.fields,
     ncProjectId: options?.ncProjectId,
     ncTableName: options?.ncTableName,
-    ncTableId: options?.ncTableId,
     tagSearchQuery: options?.tagSearchQuery, // Pass down the tag search query
   };
 

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy, Trash2, XCircle } from 'lucide-react';
+import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, ArrowLeftCircle, ArrowRightCircle, AlertTriangle, Copy, Trash2, XCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Video, VideoListItem } from '@/lib/nocodb';
 import { updateVideo, deleteVideo } from '@/lib/nocodb';
@@ -653,14 +653,37 @@ export function VideoDetailPageContent({
       </div>
     );
   }
+  const qs = searchParams.toString();
+  const queryString = qs ? `?${qs}` : "";
+
 
   
   return (
     <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
       <div className="container mx-auto max-w-5xl">
 
+        <div className="fixed top-1/2 left-2 md:left-4 z-50 transform -translate-y-1/2">
+          {previousVideo && (
+            <Link href={`/video/${previousVideo.Id}${queryString}`} title={`Previous: ${previousVideo.Title}`}
+                  className="p-2 bg-background/80 hover:bg-muted rounded-full shadow-lg backdrop-blur-sm transition-all">
+              <ArrowLeftCircle className="h-8 w-8 md:h-10 md:w-10 text-foreground" />
+            </Link>
+          )}
+        </div>
+        <div className="fixed top-1/2 right-2 md:right-4 z-50 transform -translate-y-1/2">
+          {nextVideo && (
+            <Link href={`/video/${nextVideo.Id}${queryString}`} title={`Next: ${nextVideo.Title}`}
+                  className="p-2 bg-background/80 hover:bg-muted rounded-full shadow-lg backdrop-blur-sm transition-all">
+              <ArrowRightCircle className="h-8 w-8 md:h-10 md:w-10 text-foreground" />
+            </Link>
+          )}
+        </div>
+
         <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
-          <Link href={`/?sort=${searchParams.get('sort') || '-CreatedAt'}`} className="flex items-center text-blue-400 hover:text-blue-300 transition-colors group">
+          <Link
+            href={`/?${searchParams.toString() || 'sort=-CreatedAt'}`}
+            className="flex items-center text-blue-400 hover:text-blue-300 transition-colors group"
+          >
             <ArrowLeft size={18} className="mr-2 group-hover:-translate-x-1 transition-transform duration-200" />
             Back to Video List
           </Link>

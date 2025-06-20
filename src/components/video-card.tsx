@@ -5,17 +5,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { VideoListItem } from '@/lib/nocodb'; 
 
 interface VideoCardProps {
-  video: VideoListItem; 
-  priority?: boolean; 
+  video: VideoListItem;
+  href?: string;
+  priority?: boolean;
 }
 
-export function VideoCard({ video, priority = false }: VideoCardProps) {
+export function VideoCard({ video, href, priority = false }: VideoCardProps) {
   
   const thumbnailUrl = video.ThumbHigh && typeof video.ThumbHigh === 'string' ? video.ThumbHigh : null;
 
+  const link = href || `/video/${video.VideoID}`;
+
   return (
-    
-    <Link href={`/video/${video.VideoID}`} passHref className="block hover:shadow-lg transition-shadow duration-200 rounded-lg h-full">
+
+    <Link href={link} passHref className="block hover:shadow-lg transition-shadow duration-200 rounded-lg h-full">
       <Card className="w-full flex flex-col h-full bg-card text-card-foreground p-0">
         <CardHeader className="p-0 rounded-t-lg overflow-hidden">
           {thumbnailUrl ? (
