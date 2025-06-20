@@ -157,3 +157,8 @@
 - [x] 3. Simplify filter option collection in `video-list-client.tsx` using a configuration-driven approach.
 - [x] 4. Update existing files to use new helpers without changing functionality.
 - [x] 5. Run and pass tests using `pnpm test`.
+- [x] 6. Extract numeric ID resolution into shared `resolveNumericId` helper.
+- [x] 7. Create `createRequestError` to centralize axios error handling.
+- [x] 8. Refactor `updateVideo` and `deleteVideo` to use these helpers.
+- [x] 9. Consolidate video filtering logic using a unified configuration.
+- [x] 10. Run `pnpm test` to ensure refactor maintains behavior.

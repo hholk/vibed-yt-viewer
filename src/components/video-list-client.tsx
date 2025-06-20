@@ -17,111 +17,86 @@ interface VideoListClientProps {
   })[];
 }
 
+type FilterType =
+  | 'person'
+  | 'company'
+  | 'genre'
+  | 'indicator'
+  | 'trend'
+  | 'asset'
+  | 'ticker'
+  | 'institution'
+  | 'event'
+  | 'doi'
+  | 'hashtag'
+  | 'mainTopic'
+  | 'primarySource'
+  | 'sentiment'
+  | 'sentimentReason'
+  | 'channel'
+  | 'description'
+  | 'technicalTerm'
+  | 'speaker';
+
 interface FilterOption {
   label: string;
   value: string;
-  type:
-    | 'person'
-    | 'company'
-    | 'genre'
-    | 'indicator'
-    | 'trend'
-    | 'asset'
-    | 'ticker'
-    | 'institution'
-    | 'event'
-    | 'doi'
-    | 'hashtag'
-    | 'mainTopic'
-    | 'primarySource'
-    | 'sentiment'
-    | 'sentimentReason'
-    | 'channel'
-    | 'description'
-    | 'technicalTerm'
-    | 'speaker';
+  type: FilterType;
 }
+
+const FILTER_GETTERS: Record<FilterType, (v: VideoListItem) => string[]> = {
+  person: v => (v.Persons ?? []).map(p => (typeof p === 'string' ? p : p?.Title || p?.name || '')),
+  company: v => (v.Companies ?? []).map(c => (typeof c === 'string' ? c : c?.Title || c?.name || '')),
+  genre: v => (v.VideoGenre ? [v.VideoGenre] : []),
+  indicator: v => (v.Indicators ?? []).map(i => (typeof i === 'string' ? i : i?.Title || i?.name || '')),
+  trend: v => (v.Trends ?? []).map(t => (typeof t === 'string' ? t : t?.Title || t?.name || '')),
+  asset: v => v.InvestableAssets ?? [],
+  ticker: v => (v.TickerSymbol ? [v.TickerSymbol] : []),
+  institution: v => (v.Institutions ?? []).map(inst => (typeof inst === 'string' ? inst : inst?.Title || inst?.name || '')),
+  event: v => v.EventsFairs ?? [],
+  doi: v => v.DOIs ?? [],
+  hashtag: v => v.Hashtags ?? [],
+  mainTopic: v => (v.MainTopic ? [v.MainTopic] : []),
+  primarySource: v => v.PrimarySources ?? [],
+  sentiment: v => (v.Sentiment !== null && v.Sentiment !== undefined ? [String(v.Sentiment)] : []),
+  sentimentReason: v => (v.SentimentReason ? [v.SentimentReason] : []),
+  channel: v => (v.Channel ? [v.Channel] : []),
+  description: v => (v.Description ? [v.Description] : []),
+  technicalTerm: v => v.TechnicalTerms ?? [],
+  speaker: v => (v.Speaker ? [v.Speaker] : []),
+};
 
 export function VideoListClient({ videos }: VideoListClientProps) {
   const [selectedFilters, setSelectedFilters] = useState<FilterOption[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filterConfig: Array<{
-    type: FilterOption['type'];
-    get: (v: VideoListItem) => string[];
-  }> = [
-    { type: 'person', get: v => (v.Persons ?? []).map(p => typeof p === 'string' ? p : p?.Title || p?.name || '') },
-    { type: 'company', get: v => (v.Companies ?? []).map(c => typeof c === 'string' ? c : c?.Title || c?.name || '') },
-    { type: 'genre', get: v => v.VideoGenre ? [v.VideoGenre] : [] },
-    { type: 'indicator', get: v => (v.Indicators ?? []).map(i => typeof i === 'string' ? i : i?.Title || i?.name || '') },
-    { type: 'trend', get: v => (v.Trends ?? []).map(t => typeof t === 'string' ? t : t?.Title || t?.name || '') },
-    { type: 'asset', get: v => v.InvestableAssets ?? [] },
-    { type: 'ticker', get: v => v.TickerSymbol ? [v.TickerSymbol] : [] },
-    { type: 'institution', get: v => (v.Institutions ?? []).map(inst => typeof inst === 'string' ? inst : inst?.Title || inst?.name || '') },
-    { type: 'event', get: v => v.EventsFairs ?? [] },
-    { type: 'doi', get: v => v.DOIs ?? [] },
-    { type: 'hashtag', get: v => v.Hashtags ?? [] },
-    { type: 'mainTopic', get: v => v.MainTopic ? [v.MainTopic] : [] },
-    { type: 'primarySource', get: v => v.PrimarySources ?? [] },
-    { type: 'sentiment', get: v => v.Sentiment !== null && v.Sentiment !== undefined ? [String(v.Sentiment)] : [] },
-    { type: 'sentimentReason', get: v => v.SentimentReason ? [v.SentimentReason] : [] },
-    { type: 'channel', get: v => v.Channel ? [v.Channel] : [] },
-    { type: 'description', get: v => v.Description ? [v.Description] : [] },
-    { type: 'technicalTerm', get: v => v.TechnicalTerms ?? [] },
-    { type: 'speaker', get: v => v.Speaker ? [v.Speaker] : [] },
-  ];
-
   const allOptions = useMemo<FilterOption[]>(() => {
-    const sets = filterConfig.reduce((acc, f) => {
-      acc[f.type] = new Set<string>();
-      return acc;
-    }, {} as Record<FilterOption['type'], Set<string>>);
-
+    const sets: Record<FilterType, Set<string>> = {} as Record<FilterType, Set<string>>;
+    (Object.keys(FILTER_GETTERS) as FilterType[]).forEach(t => (sets[t] = new Set()));
     videos.forEach(v => {
-      filterConfig.forEach(cfg => {
-        cfg.get(v).forEach(val => val && sets[cfg.type].add(val));
-      });
+      (Object.entries(FILTER_GETTERS) as [FilterType, (v: VideoListItem) => string[]][]).forEach(
+        ([type, getter]) => {
+          getter(v).forEach(val => val && sets[type].add(val));
+        },
+      );
     });
-
-    return filterConfig.flatMap(cfg =>
-      Array.from(sets[cfg.type]).map(value => ({ label: value, value, type: cfg.type }))
+    return (Object.entries(sets) as [FilterType, Set<string>][]) .flatMap(([type, set]) =>
+      Array.from(set).map(value => ({ label: value, value, type }))
     );
   }, [videos]);
 
   const availableOptions = useMemo(() => {
     return allOptions.filter(
-      (opt) =>
-        !selectedFilters.some((f) => f.value === opt.value && f.type === opt.type) &&
+      opt =>
+        !selectedFilters.some(f => f.value === opt.value && f.type === opt.type) &&
         opt.label.toLowerCase().includes(searchTerm.toLowerCase()),
     );
   }, [allOptions, selectedFilters, searchTerm]);
 
-  const predicateMap: Record<FilterOption['type'], (v: VideoListItem, value: string) => boolean> = {
-    person: (v, val) => v.Persons?.some(p => (typeof p === 'string' ? p : p?.Title || p?.name) === val) ?? false,
-    company: (v, val) => v.Companies?.some(c => (typeof c === 'string' ? c : c?.Title || c?.name) === val) ?? false,
-    genre: (v, val) => v.VideoGenre === val,
-    indicator: (v, val) => v.Indicators?.some(i => (typeof i === 'string' ? i : i?.Title || i?.name) === val) ?? false,
-    trend: (v, val) => v.Trends?.some(t => (typeof t === 'string' ? t : t?.Title || t?.name) === val) ?? false,
-    asset: (v, val) => v.InvestableAssets?.includes(val) ?? false,
-    ticker: (v, val) => v.TickerSymbol === val,
-    institution: (v, val) => v.Institutions?.some(inst => (typeof inst === 'string' ? inst : inst?.Title || inst?.name) === val) ?? false,
-    event: (v, val) => v.EventsFairs?.includes(val) ?? false,
-    doi: (v, val) => v.DOIs?.includes(val) ?? false,
-    hashtag: (v, val) => v.Hashtags?.includes(val) ?? false,
-    mainTopic: (v, val) => v.MainTopic === val,
-    primarySource: (v, val) => v.PrimarySources?.includes(val) ?? false,
-    sentiment: (v, val) => String(v.Sentiment ?? '') === val,
-    sentimentReason: (v, val) => v.SentimentReason === val,
-    channel: (v, val) => v.Channel === val,
-    description: (v, val) => v.Description === val,
-    technicalTerm: (v, val) => v.TechnicalTerms?.includes(val) ?? false,
-    speaker: (v, val) => v.Speaker === val,
-  };
-
   const filteredVideos = useMemo(() => {
     if (selectedFilters.length === 0) return videos;
     return videos.filter(v =>
-      selectedFilters.every(f => predicateMap[f.type](v, f.value))
+      selectedFilters.every(f => FILTER_GETTERS[f.type](v).includes(f.value))
     );
   }, [videos, selectedFilters]);
 
