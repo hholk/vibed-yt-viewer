@@ -27,12 +27,12 @@ function createRequestError(prefix: string, error: unknown) {
 export async function resolveNumericId(
   idOrVideoId: number | string,
   ncProjectId?: string,
-  ncTableName?: string,
+  ncTableId?: string,
 ): Promise<number> {
   if (typeof idOrVideoId === 'number') return idOrVideoId;
   const asNum = Number(idOrVideoId);
   if (!isNaN(asNum) && Number.isInteger(asNum)) return asNum;
-  const video = await fetchVideoByVideoId(String(idOrVideoId), ncProjectId, ncTableName);
+  const video = await fetchVideoByVideoId(String(idOrVideoId), ncProjectId, ncTableId);
   if (!video) throw new Error(`No video found with VideoID: ${idOrVideoId}`);
   return video.Id;
 }
@@ -42,8 +42,7 @@ export interface NocoDBConfig {
   url: string;
   token: string;
   projectId: string;
-  tableName: string;
-  tableId: string;
+  tableId: string; // Table ID is now required for all NocoDB v2 API operations
   sourceAlias: string; // Added sourceAlias
 }
 
@@ -51,36 +50,35 @@ export interface NocoDBConfig {
  * Resolves NocoDB configuration from environment variables with optional
  * overrides. Throws if the URL or token are missing.
  */
+// Returns the NocoDB configuration using ONLY the following environment variables:
+// - NC_URL: URL of your NocoDB instance
+// - NC_TOKEN: API token for authentication
+// - NOCODB_TABLE_ID: The table name to use
+// - NOCODB_PROJECT_ID: The project/database ID
+// All other variable names and defaults have been removed for strictness.
 export function getNocoDBConfig(overrides: Partial<NocoDBConfig> = {}): NocoDBConfig {
-  const url = overrides.url || process.env.NOCODB_URL || process.env.NC_URL;
-  const token = overrides.token || process.env.NOCODB_AUTH_TOKEN || process.env.NC_TOKEN;
-  const projectId =
-    overrides.projectId ||
-    process.env.NC_PROJECT_ID || // Memory indicates NC_PROJECT_ID for .env
-    process.env.NOCODB_PROJECT_ID || // Fallback
-    'phk8vxq6f1ev08h'; // Default
-  const tableName =
-    overrides.tableName ||
-    process.env.NC_TABLE_NAME || // Memory indicates NC_TABLE_NAME for .env
-    process.env.NOCODB_TABLE_NAME || // Fallback
-    'youtubeTranscripts'; // Default
-  const tableId =
-    overrides.tableId ||
-    process.env.NOCODB_TABLE_ID ||
-    '';
-  const sourceAlias =
-    overrides.sourceAlias ||
-    process.env.NC_SOURCE_ALIAS ||
-    'noco'; // Default source alias
+  // Read configuration from overrides (function arguments) or environment variables
+  const url = overrides.url || process.env.NC_URL;
+  const token = overrides.token || process.env.NC_TOKEN;
+  const projectId = overrides.projectId || process.env.NOCODB_PROJECT_ID;
+  const tableId = overrides.tableId || process.env.NOCODB_TABLE_ID;
+  const sourceAlias = overrides.sourceAlias || 'noco'; // Kept for compatibility
 
+  // Throw errors if required variables are missing
   if (!url) {
-    throw new Error('NocoDB URL is not configured. Please set NOCODB_URL (or NC_URL) in your environment.');
+    throw new Error('NocoDB URL is not configured. Please set NC_URL in your environment.');
   }
   if (!token) {
-    throw new Error('NocoDB Auth Token is not configured. Please set NOCODB_AUTH_TOKEN (or NC_TOKEN) in your environment.');
+    throw new Error('NocoDB Auth Token is not configured. Please set NC_TOKEN in your environment.');
+  }
+  if (!projectId) {
+    throw new Error('NocoDB Project ID is not configured. Please set NOCODB_PROJECT_ID in your environment.');
+  }
+  if (!tableId) {
+    throw new Error('NocoDB Table ID is not configured. Please set NOCODB_TABLE_ID in your environment.');
   }
 
-  return { url, token, projectId, tableName, tableId, sourceAlias };
+  return { url, token, projectId, tableId, sourceAlias };
 }
 
 
@@ -155,7 +153,7 @@ const linkedRecordItemSchema = z.object({
  */
 export const videoSchema = z.object({
   Id: z.number().int(),
-  VideoID: z.string(),
+  VideoID: z.string().nullable(),
   URL: z.string().url().optional().nullable(),
   ThumbHigh: z.preprocess(
     (val) => {
@@ -178,7 +176,7 @@ export const videoSchema = z.object({
     },
     z.string().url().nullable() 
   ),
-  Title: z.string(),
+  Title: z.string().nullable(),
   Channel: z.string().optional().nullable().default(null),
   Description: z.string().optional().nullable().default(null),
   ImportanceRating: z.number().int().min(1).max(5).optional().nullable().default(null),
@@ -186,8 +184,8 @@ export const videoSchema = z.object({
   CreatedAt: z.coerce.date().optional().nullable().default(null),
   UpdatedAt: z.coerce.date().optional().nullable().default(null),
   PublishedAt: z.coerce.date().optional().nullable().default(null),
-  Tags: z.preprocess(emptyObjectToNull, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
-  Categories: z.preprocess(emptyObjectToNull, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Tags: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Categories: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   CompletionDate: z.coerce.date().optional().nullable().default(null),
   FullTranscript: z.string().optional().nullable().default(null),
   ActionableAdvice: z.string().optional().nullable().default(null),
@@ -211,8 +209,8 @@ export const videoSchema = z.object({
   
   Indicators: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   Trends: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
-  Locations: z.preprocess(emptyObjectToNull, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
-  Events: z.preprocess(emptyObjectToNull, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Locations: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Events: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   FileFormat: z.string().optional().nullable().default(null),
   FileSize: z.string().optional().nullable().default(null),
   FrameRate: z.number().optional().nullable().default(null),
@@ -221,7 +219,7 @@ export const videoSchema = z.object({
   MainTopic: z.string().optional().nullable().default(null),
   Priority: z.string().optional().nullable().default(null),
   Private: z.boolean().optional().nullable().default(null),
-  Products: z.preprocess(emptyObjectToNull, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Products: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   Project: z.string().optional().nullable().default(null),
   Resolution: z.string().optional().nullable().default(null),
   Source: z.string().optional().nullable().default(null),
@@ -229,7 +227,7 @@ export const videoSchema = z.object({
   Speaker: z.string().optional().nullable().default(null),
   Status: z.string().optional().nullable().default(null),
   Subtitles: z.union([z.boolean(), z.preprocess(emptyObjectToNull, z.array(z.string()))]).optional().nullable().default(null),
-  Speakers: z.preprocess(emptyObjectToNull, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Speakers: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   Transcript: z.string().optional().nullable().default(null), 
 
   
@@ -274,7 +272,7 @@ export type Video = z.infer<typeof videoSchema>;
  */
 export const videoListItemSchema = z.object({
   Id: z.number().int(),
-  Title: z.string(),
+  Title: z.string().nullable(),
   ThumbHigh: z.preprocess(
     (val) => {
       if (Array.isArray(val) && val.length > 0 && val[0] && typeof val[0].url === 'string') {
@@ -353,7 +351,7 @@ export const videoListItemSchema = z.object({
     z.array(z.string()).nullable().default([]).optional(),
   ),
   Speaker: z.string().optional().nullable(),
-  VideoID: z.string(),
+  VideoID: z.string().nullable(),
 }).describe('videoListItemSchema_grid');
 export type VideoListItem = z.infer<typeof videoListItemSchema>;
 
@@ -404,7 +402,7 @@ const DEFAULT_PAGE_SIZE = 25;
  * @param recordId - The ID of the record to update
  * @param data - Partial video object containing fields to update
  * @param ncProjectIdParam - Optional override for NocoDB project ID
- * @param ncTableNameParam - Optional override for NocoDB table name
+ * @param ncTableIdParam - Optional override for NocoDB table name
  * @returns The updated video record
  * @throws Error if the update fails or response validation fails
  */
@@ -418,11 +416,11 @@ export async function updateVideo(
   recordIdOrVideoId: number | string,
   data: Partial<z.infer<typeof videoSchema>>,
   ncProjectIdParam?: string,
-  ncTableNameParam?: string
+  ncTableIdParam?: string
 ): Promise<Video> {
-  const { url: ncUrl, token, projectId, tableName, tableId } = getNocoDBConfig({
+  const { url: ncUrl, token, projectId, tableId } = getNocoDBConfig({
     projectId: ncProjectIdParam,
-    tableName: ncTableNameParam,
+    tableId: ncTableIdParam,
   });
 
   // Prepare the data for the API
@@ -437,7 +435,7 @@ export async function updateVideo(
   // Resolve the numeric ID first
   let numericId: number;
   try {
-    numericId = await resolveNumericId(recordIdOrVideoId, projectId, tableName);
+    numericId = await resolveNumericId(recordIdOrVideoId, projectId, tableId);
     console.log(`[updateVideo] Resolved record ID ${recordIdOrVideoId} to numeric ID:`, numericId);
   } catch (error) {
     console.error(`[updateVideo] Failed to resolve numeric ID for record ${recordIdOrVideoId}:`, error);
@@ -445,7 +443,7 @@ export async function updateVideo(
   }
 
   // Build the URL for the PATCH request
-  const requestUrl = `${ncUrl}/api/v2/tables/${tableId || tableName}/records/${numericId}`;
+  const requestUrl = `${ncUrl}/api/v2/tables/${tableId || tableId}/records/${numericId}`;
 
   console.log(`[updateVideo] PATCH to:`, requestUrl, 'with data:', updateData);
 
@@ -478,7 +476,9 @@ export async function updateVideo(
 
     // Update the cache with the new data
     const updatedVideo = parsed.data;
-    setInCache(updatedVideo.VideoID, updatedVideo);
+    if (updatedVideo.VideoID) {
+      setInCache(updatedVideo.VideoID, updatedVideo);
+    }
     
     // Also cache by numeric ID if available
     if (updatedVideo.Id) {
@@ -504,24 +504,24 @@ export async function updateVideo(
 export async function deleteVideo(
   recordIdOrVideoId: number | string,
   ncProjectIdParam?: string,
-  ncTableNameParam?: string
+  ncTableIdParam?: string
 ): Promise<void> {
 
-  const { url, token, projectId, tableName, tableId } = getNocoDBConfig({
+  const { url, token, projectId, tableId } = getNocoDBConfig({
     projectId: ncProjectIdParam,
-    tableName: ncTableNameParam,
+    tableId: ncTableIdParam,
   });
 
   let numericId: number;
   try {
-    numericId = await resolveNumericId(recordIdOrVideoId, projectId, tableName);
+    numericId = await resolveNumericId(recordIdOrVideoId, projectId, tableId);
     console.log(`[deleteVideo] Resolved record ID ${recordIdOrVideoId} to numeric ID:`, numericId);
   } catch (error) {
     console.error(`[deleteVideo] Failed to resolve numeric ID for record ${recordIdOrVideoId}:`, error);
     throw new Error(`Could not find video with ID: ${recordIdOrVideoId}`);
   }
 
-  const requestUrl = `${url}/api/v2/tables/${tableId || tableName}/records/${numericId}`;
+  const requestUrl = `${url}/api/v2/tables/${tableId || tableId}/records/${numericId}`;
   console.log('[deleteVideo] DELETE to:', requestUrl);
 
   try {
@@ -543,19 +543,10 @@ interface FetchVideosOptions<T extends z.ZodTypeAny> {
   page?: number;
   fields?: string[];
   schema?: T;
-  
   /**
    * Override for NocoDB project ID
    */
   ncProjectId?: string;
-  /**
-   * Override for NocoDB table name
-   */
-  ncTableName?: string;
-  /**
-   * Override for NocoDB table ID (v2 API)
-   */
-  ncTableId?: string;
   /**
    * Override for NocoDB table ID (v2 API)
    */
@@ -578,9 +569,9 @@ interface FetchVideosOptions<T extends z.ZodTypeAny> {
 export async function fetchVideos<T extends z.ZodTypeAny>(
   options?: FetchVideosOptions<T>
 ): Promise<{ videos: z.infer<T>[]; pageInfo: PageInfo }> {
-  const { url, token, projectId, tableName, tableId, sourceAlias } = getNocoDBConfig({
+  // Only extract used variables to avoid lint errors
+const { url, token, tableId } = getNocoDBConfig({
     projectId: options?.ncProjectId,
-    tableName: options?.ncTableName,
     tableId: options?.ncTableId,
   });
 
@@ -639,7 +630,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
     try {
       // First try with all requested fields
       response = await apiClient.get(
-        `${url}/api/v2/tables/${tableId || tableName}/records`,
+        `${url}/api/v2/tables/${tableId || tableId}/records`,
         {
           headers: { 'xc-token': token },
           params: {
@@ -662,7 +653,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
           );
           
           response = await apiClient.get(
-            `${url}/api/v2/tables/${tableId || tableName}/records`,
+            `${url}/api/v2/tables/${tableId || tableId}/records`,
             {
               headers: { 'xc-token': token },
               params: {
@@ -746,27 +737,28 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
  * 
  * @param videoId - The VideoID of the video to fetch
  * @param ncProjectIdParam - Optional override for NocoDB project ID
- * @param ncTableNameParam - Optional override for NocoDB table name
+ * @param ncTableIdParam - Optional override for NocoDB table name
  * @returns The video record or null if not found
  * @throws Error if the request fails or response validation fails
  */
-export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: string, ncTableNameParam?: string): Promise<Video | null> {
+export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: string, ncTableIdParam?: string): Promise<Video | null> {
   // Get cached video if available
   const cached = getFromCache<Video>(videoId);
   if (cached) {
     return cached;
   }
 
-  const { url, token, projectId, tableName, tableId, sourceAlias } = getNocoDBConfig({
+  // Only extract used variables to avoid lint errors
+const { url, token, tableId } = getNocoDBConfig({
     projectId: ncProjectIdParam,
-    tableName: ncTableNameParam,
+    tableId: ncTableIdParam,
   });
 
   // Make the request to NocoDB
   try {
     // First try with all fields
     const response = await apiClient.get<NocoDBResponse<z.infer<typeof videoSchema>>>(
-      `${url}/api/v2/tables/${tableId || tableName}/records`,
+      `${url}/api/v2/tables/${tableId || tableId}/records`,
       {
         headers: { 'xc-token': token },
         params: {
@@ -810,14 +802,13 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
     return parsedVideo.data;
   } catch (error: unknown) {
     // Handle any errors that occur during the request
-    let errorMessage = 'Unknown error';
-    let statusCode: number | undefined;
-    let errorData: unknown = undefined;
+    // Removed unused variable errorMessage to fix lint error
+    // Removed unused variables statusCode and errorData to fix lint errors.
 
     if (axios.isAxiosError(error)) {
-      errorMessage = error.message;
-      statusCode = error.response?.status;
-      errorData = error.response?.data;
+      // errorMessage = error.message; // Removed unused assignment to fix lint
+      // statusCode = error.response?.status;
+      // errorData = error.response?.data;
       
       if (error.response) {
         console.error('NocoDB API error response:', {
@@ -830,9 +821,9 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
         console.error('No response received from NocoDB API');
       }
     } else if (error instanceof Error) {
-      errorMessage = error.message;
+      // errorMessage = error.message; // Removed unused assignment to fix lint
     } else if (typeof error === 'string') {
-      errorMessage = error;
+      // errorMessage = error; // Removed unused assignment to fix lint
       return null;
     }
     
@@ -885,7 +876,7 @@ interface FetchAllVideosOptions<T extends z.ZodTypeAny> {
   /**
    * Override for NocoDB table name
    */
-  ncTableName?: string;
+  ncTableId?: string;
   /**
    * Optional search query string for tags.
    * Words in the string will be used to filter with 'ilike' on the Hashtags field.
@@ -913,7 +904,7 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
     sort: options?.sort,
     fields: options?.fields,
     project: options?.ncProjectId,
-    table: options?.ncTableName,
+    table: options?.ncTableId,
   });
   const cached = getFromCache<z.infer<T>[]>(cacheKey);
   if (cached) {
@@ -927,7 +918,6 @@ export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
     limit: pageSize,
     fields: options?.fields,
     ncProjectId: options?.ncProjectId,
-    ncTableName: options?.ncTableName,
     ncTableId: options?.ncTableId,
     tagSearchQuery: options?.tagSearchQuery, // Pass down the tag search query
   };

@@ -1,8 +1,15 @@
-vi.mock("next/image", () => ({ __esModule: true, default: (props: any) => (<img {...props} />) }));
+// Import Vitest test globals for mocking and testing
+import { describe, it, expect, vi } from 'vitest';
+// Mock the next/image module to return a simple img tag for testing purposes.
+// The props type is set to React.ImgHTMLAttributes<HTMLImageElement> to match the props of the img tag.
+vi.mock("next/image", () => ({ __esModule: true, default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => (<img {...props} />) }));
+
 import { render } from '@testing-library/react';
 import { VideoCard } from './video-card';
 import type { VideoListItem } from '@/lib/nocodb';
 
+// Use a specific type for mockVideo instead of 'any'. 
+// Here, we use Partial<VideoListItem> to allow for partial video data.
 const sample: VideoListItem = {
   Id: 1,
   Title: 'Test Video',

@@ -697,27 +697,27 @@ export function VideoDetailPageContent({
           </div>
         )}
 
-        {} 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {}
           <div className="md:col-span-2 space-y-4">
             {fieldOrder.map((fieldKey: keyof Video) => {
-              let value = currentVideo[fieldKey];
-              const label = formatFieldName(String(fieldKey));
+               let value = currentVideo[fieldKey];
+               const label = formatFieldName(String(fieldKey));
 
-              
-              if (typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length === 0) {
-                value = null;
-              }
+               // Guard: if value is an empty object, set to null
+               // This check is done immediately after value assignment to prevent passing empty objects to DetailItem
+               if (typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length === 0 && value.constructor === Object) {
+                 value = null;
+               }
 
-              if (value === null || value === undefined || 
-                 (typeof value === 'string' && value.trim() === '') ||
-                 (Array.isArray(value) && value.length === 0)
-              ) {
-                return null; 
-              }
+               if (value === null || value === undefined || 
+                  (typeof value === 'string' && value.trim() === '') ||
+                  (Array.isArray(value) && value.length === 0)
+               ) {
+                 return null; 
+               }
 
-              let isInitiallyCollapsed = true;
+               let isInitiallyCollapsed = true;
               const initiallyExpandedFields = ['ThumbHigh', 'URL', 'ActionableAdvice', 'TLDR', 'MainSummary'];
               if (initiallyExpandedFields.includes(String(fieldKey))) {
                 isInitiallyCollapsed = false;
@@ -727,11 +727,13 @@ export function VideoDetailPageContent({
               const isLnk = fieldKey === 'URL' || (fieldKey === 'RelatedURLs' && Array.isArray(value) && value.every(item => typeof item === 'string' && item.startsWith('http')));
               const isMd = MARKDOWN_FIELDS.includes(String(fieldKey)) || fieldKey === 'Description' || fieldKey === 'Transcript' || (typeof value === 'string' && String(value).length > 100 && !isLnk && !isImg);
 
+              // type assertion: all runtime guards in place
+              // This assertion is done to ensure that value is of type FieldValue when passed to DetailItem
               return (
                 <DetailItem
                   key={String(fieldKey)}
                   label={label}
-                  value={value}
+                  value={value as FieldValue} 
                   isInitiallyCollapsed={isInitiallyCollapsed}
                   isMarkdown={isMd}
                   isImage={isImg}

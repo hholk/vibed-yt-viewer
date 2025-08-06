@@ -26,7 +26,7 @@ A modern, responsive web application for browsing, searching, and interacting wi
 - **Linting**: ESLint
 ## Architecture Overview
 
-The app uses Next.js 15 with the App Router and React Server Components. Data comes from a NocoDB backend accessed via an Axios-based client. Tailwind CSS and shadcn/ui provide the UI layer. See the project structure below for folder layout.
+The app uses Next.js 15 with the App Router and React Server Components. Data comes from a NocoDB backend accessed via an Axios-based client. Zod is used for robust schema validation and data transformation, including parsing comma-separated strings from NocoDB into individual tags. Tailwind CSS and shadcn/ui provide the UI layer. See the project structure below for folder layout.
 
 
 ## 📦 Prerequisites
@@ -52,7 +52,15 @@ If you use VS Code, the repository includes a preconfigured **dev container**. I
    ```
 
 3. **Set up environment variables**
-   See the [Environment Setup](#environment-setup) section for required variables.
+   Create a `.env.local` file (or `.env`) in the project root with the following variables:
+   ```env
+   # NocoDB connection configuration
+   NC_URL=http://localhost:8080
+   NC_TOKEN=your_nocodb_token
+   NOCODB_TABLE_ID=youtubeTranscripts
+   # NC_PROJECT_ID=phk8vxq6f1ev08h
+   ```
+   > **Note for beginners:** Only these three variables are needed to connect the app to your NocoDB instance. Note that `NOCODB_TABLE_ID` is required for all API v2 calls; table names are no longer supported. Do not use any other variable names for NocoDB configuration.
 
 4. **Start the development server**
    ```bash
@@ -68,7 +76,7 @@ The application expects a running NocoDB instance and a few environment variable
 ```env
 NC_URL=http://localhost:8080
 NC_TOKEN=your_nocodb_token
-NOCODB_TABLE_NAME=youtubeTranscripts
+NOCODB_TABLE_ID=youtubeTranscripts
 # NC_PROJECT_ID=phk8vxq6f1ev08h
 ```
 

@@ -7,15 +7,37 @@ import { Badge } from "@/components/ui/badge";
 import type { VideoListItem } from "@/lib/nocodb";
 import { X } from "lucide-react";
 
-const extractTitles = (
-  items?: (string | { Title?: string | null; name?: string | null })[] | null,
-): string[] =>
-  (items ?? []).map((i) =>
-    typeof i === "string" ? i : i?.Title || i?.name || "",
-  );
+// extractTitles takes an array of strings or objects with Title/name and returns an array of strings for filtering/searching.
+function extractTitles(
+  items?: (string | { Title?: string | null; name?: string | null })[] | null
+): string[] {
+  if (!items) return [];
+  return items.map((i) => {
+    if (typeof i === "string") return i;
+    if (typeof i === "object" && i !== null) {
+      // Prefer Title, then name, fallback to empty string
+      return ("Title" in i && i.Title) ? i.Title : ("name" in i && i.name) ? i.name ?? "" : "";
+    }
+    return "";
+  });
+}
 
-const linkedGetter = (key: keyof VideoListItem) => (v: VideoListItem) =>
-  extractTitles((v as any)[key]);
+// linkedGetter safely extracts an array of strings from a VideoListItem using the provided key.
+function linkedGetter(key: keyof VideoListItem) {
+  return (v: VideoListItem): string[] => {
+    const value = v[key] as unknown;
+    // Accept arrays of strings or objects with Title/name
+    if (Array.isArray(value)) {
+      return extractTitles(value as (string | { Title?: string | null; name?: string | null })[]);
+    }
+    // Accept single string
+    if (typeof value === "string") {
+      return [value];
+    }
+    // Accept null/undefined
+    return [];
+  };
+}
 
 interface VideoListClientProps {
   videos: (VideoListItem & {
@@ -37,9 +59,12 @@ interface VideoListClientProps {
   })[];
 }
 
+// FilterType lists all possible filter categories for videos. Add 'tags' and 'categories' for tag/category filtering.
 type FilterType =
   | "person"
   | "company"
+  | "tags" // enables tag filtering
+  | "categories" // enables category filtering
   | "genre"
   | "indicator"
   | "trend"
@@ -64,8 +89,14 @@ interface FilterOption {
   type: FilterType;
 }
 
+// FILTER_GETTERS maps each filter type to a function that extracts an array of strings from a video item.
+// For fields that contain linked records (like tags or categories), we use linkedGetter to extract the 'Title' from each object.
 const FILTER_GETTERS: Record<FilterType, (v: VideoListItem) => string[]> = {
   person: linkedGetter("Persons"),
+  // 'tags' field: enables searching/filtering by individual tags (parsed from comma-separated string)
+  tags: linkedGetter("Tags"),
+  // 'categories' field: enables searching/filtering by individual categories
+  categories: linkedGetter("Categories"),
   company: linkedGetter("Companies"),
   genre: (v) => (v.VideoGenre ? [v.VideoGenre] : []),
   indicator: linkedGetter("Indicators"),

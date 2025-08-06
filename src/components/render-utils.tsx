@@ -2,20 +2,25 @@ import React from 'react';
 import { Badge } from './ui/badge';
 import { Star } from 'lucide-react';
 
+// renderBadgeList renders a list of badges from an array of strings or objects with Title/name.
 export const renderBadgeList = (
   items: (string | { Title?: string | null; name?: string | null } | undefined)[] | null | undefined,
   label: string,
   variant: 'secondary' | 'outline' = 'secondary'
 ) => {
   if (!items || items.length === 0) return null;
-  const validItems = items.filter(item => item && (typeof item === 'string' || (item as any).Title || (item as any).name));
+  // Use Boolean(...) to ensure the filter always returns a boolean (fixes lint error for beginners)
+const validItems = items.filter(
+  (item): item is string | { Title?: string | null; name?: string | null } =>
+    Boolean(item && (typeof item === 'string' || (typeof item === 'object' && (item.Title || item.name))))
+);
   if (validItems.length === 0) return null;
   return (
     <div className="mb-4">
       <h3 className="text-md font-semibold text-muted-foreground mb-1.5">{label}</h3>
       <div className="flex flex-wrap gap-1">
         {validItems.map((item, index) => {
-          const content = typeof item === 'string' ? item : (item as any)?.Title || (item as any)?.name || '';
+          const content = typeof item === 'string' ? item : item?.Title || item?.name || '';
           return (
             <Badge key={index} variant={variant}>
               {content}

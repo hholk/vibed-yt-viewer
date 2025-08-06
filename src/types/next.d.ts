@@ -67,7 +67,7 @@ declare namespace NodeJS {
     NOCODB_AUTH_TOKEN?: string;
     NC_PROJECT_ID?: string;
     NOCODB_PROJECT_ID?: string;
-    NOCODB_TABLE_NAME?: string;
+    NOCODB_TABLE_ID?: string;
     NOCODB_TABLE_ID?: string;
   }
 }

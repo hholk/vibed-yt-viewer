@@ -39,7 +39,8 @@ export function VideoCard({ video, priority = false }: VideoCardProps) {
         <CardContent className="p-2 flex-grow flex flex-col justify-between -mt-px">
           <div>
             {}
-            <CardTitle className="text-base font-semibold line-clamp-2 mb-0.5" title={video.Title}>
+            /* Ensure title prop is string | undefined (never null) */
+            <CardTitle className="text-base font-semibold line-clamp-2 mb-0.5" title={video.Title ?? undefined}>
               {video.Title}
             </CardTitle>
             {video.Channel && (

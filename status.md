@@ -2,6 +2,30 @@
 
 ## Done
 
+- **Search Tag Parsing Refactor**
+  - **File:** `src/lib/nocodb.ts`
+  - **Change:** Updated Zod schemas to use the `stringToLinkedRecordArrayPreprocessor` for various fields, ensuring that comma-separated strings from NocoDB are correctly parsed into individual tags.
+  - **Affected Fields:** `Tags`, `Categories`, `Products`, `Speakers`, `Locations`, `Events`.
+  - **Testing:** Fixed failing tests in `src/lib/nocodb.test.ts` by properly mocking all required environment variables for the `getNocoDBConfig` function.
+
+- **Local Development Environment Setup**
+  - Repository cloned to `/Users/henrikholkenbrink/yt-viewer/vibed-yt-viewer`
+  - Dependencies installed with `pnpm`
+  - `.env` configured:
+    - `NC_URL=http://localhost:8080`
+    - `NC_TOKEN=9eUdCOkB9_2RbIIecQwvIFOC_XBn1iAsrYVgu7VS`
+    - `NOCODB_PROJECT_ID=phk8vxq6f1ev08h`
+    - `NOCODB_TABLE_ID=youtubeTranscripts`
+  - NocoDB dashboard: [http://127.0.0.1:8080/dashboard/#/nc/phk8vxq6f1ev08h/m1lyoeqptp7fq5z](http://127.0.0.1:8080/dashboard/#/nc/phk8vxq6f1ev08h/m1lyoeqptp7fq5z)
+  - Development server running at [http://localhost:3030](http://localhost:3030)
+
+- **NocoDB Config Refactor**
+  - Refactored NocoDB config to only use `NC_URL`, `NC_TOKEN`, `NOCODB_TABLE_ID`, `NOCODB_PROJECT_ID`.
+  - Removed all legacy environment variable support from code and tests.
+
+- **NocoDB API v2 tableId Refactor**
+  - Refactor NocoDB integration to use table ID (NOCODB_TABLE_ID) for all API v2 requests, removing table name usage. Updated env, code, and docs accordingly. Strict required env vars: NC_URL, NC_TOKEN, NOCODB_PROJECT_ID, NOCODB_TABLE_ID.
+
 - **5-Star Rating & Personal Comments**
 
   - Added interactive 5-star rating component for the `ImportanceRating` field
@@ -23,7 +47,7 @@
   - Framework: Next.js 15.3
   - UI: React 19, Tailwind CSS 4, shadcn/ui
   - Package Manager: pnpm
-  - Initial page: Centered card with 'Youtube.Viewer 🚀'.
+  - Initial page: Centered card with 'Youtube.Viewer '.
   - Vitest setup: Basic render test for `/`.
 - **Design Tokens**
   - Brand color: CSS variable `--color-brand: hsl(0, 0%, 20%)` (dark grey) in `src/app/globals.css`.
@@ -52,9 +76,9 @@
   - Refined `VideoSchema` and `NocoDBResponseSchema` (Zod) for robust API response validation:
     - `ThumbHigh` field transformed from NocoDB attachment array to a direct image URL string (or `null`).
     - Optional text fields (`Channel`, `Description`, `PersonalComment`) and `ImportanceRating` now default to `null` if not present in API response, resolving test inconsistencies.
-  - `fetchVideos` function to get and validate video records, dynamically reading environment variables (`NC_URL`, `NC_TOKEN`, `NOCODB_TABLE_NAME`).
+  - `fetchVideos` function to get and validate video records, dynamically reading environment variables (`NC_URL`, `NC_TOKEN`, `NOCODB_TABLE_ID`).
   - Vitest tests (`src/lib/nocodb.test.ts`): All tests passing. Comprehensive mocking of Axios for various scenarios (success, API errors, invalid data structure, missing env vars). Tests confirm correct parsing of refined schema, including optional fields.
-  - Local NocoDB connection settings for development/testing: `NC_URL=http://nocodb:8080` (Docker network hostname), `projectId='phk8vxq6f1ev08h'` (hardcoded in `nocodb.ts`), `NC_TOKEN=<user_provided_token>`, `NOCODB_TABLE_NAME=youtubeTranscripts` (user to set these in `.env.local`).
+  - Local NocoDB connection settings for development/testing: `NC_URL=http://nocodb:8080` (Docker network hostname), `projectId='phk8vxq6f1ev08h'` (hardcoded in `nocodb.ts`), `NC_TOKEN=<user_provided_token>`, `NOCODB_TABLE_ID=youtubeTranscripts` (user to set these in `.env.local`).
 - **NocoDB API Client (`src/lib/nocodb.ts`) String-to-Array Parsing Fix:**
   - Resolved Zod parsing errors where NocoDB API returned newline-separated strings for fields expected as arrays in `fetchVideoByVideoId`.
   - Introduced `stringToArrayOrNullPreprocessor`: Converts newline-separated strings to `string[]`, trims values, and handles empty/null inputs. Applied to fields like `MemorableQuotes`, `MemorableTakeaways`, `Hashtags`, `KeyExamples`, `InvestableAssets`, `PrimarySources`, `TechnicalTerms`.
