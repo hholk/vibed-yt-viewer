@@ -34,3 +34,5 @@ Develop a modern, performant, and user-friendly web application for browsing, se
     - `status.md`: Maintain a running log of completed tasks, work in progress, and future to-dos. Include important variables and settings in the 'Done' items.
     - `prompt.md`: Review and update this file to reflect the current project state and goals.
 - **NocoDB API:** Use NocoDB API v2, ensuring all requests use the required `tableId` and `projectId`.
+- **Robots/Crawling:** During development, all crawlers are disallowed via `public/robots.txt` with `User-agent: *` and `Disallow: /`. Update when SEO is desired.
+ - **Detail View Export:** Provide a subtle top-center button to export the current video as `Title-VideoID.md` with YAML frontmatter and content sections (summaries, lists, description, transcript).
