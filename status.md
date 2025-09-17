@@ -28,6 +28,20 @@
 - **NocoDB API v2 tableId Refactor**
   - Refactor NocoDB integration to use table ID (NOCODB_TABLE_ID) for all API v2 requests, removing table name usage. Updated env, code, and docs accordingly. Strict required env vars: NC_URL, NC_TOKEN, NOCODB_PROJECT_ID, NOCODB_TABLE_ID.
 
+- **Documentation Updates (2025-09-17)**
+  - README.md: Added comprehensive "NocoDB API Usage (v2)" section with endpoints, headers, filtering examples, pagination, example code, and Zod schema notes.
+  - prompt.md: Added "NocoDB v2 – Canonical Usage" and a contributor checklist emphasizing env vars, endpoints, headers, filtering, and schema updates.
+  - Status practice: This file structured with clear Done / In Progress / To Do; includes env variables and endpoint settings.
+  - Important variables & settings:
+    - NC_URL=http://localhost:8080
+    - NC_TOKEN=<your_token>
+    - NOCODB_PROJECT_ID=phk8vxq6f1ev08h
+    - NOCODB_TABLE_ID=m1lyoeqptp7fq5z
+    - Endpoints used:
+      - GET {NC_URL}/api/v2/tables/{tableId}/records
+      - PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowId}
+      - DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}
+
 - **NocoDB Tag Search Filter Fix**
   - **File:** `src/lib/nocodb.ts`
   - **Function:** `fetchVideos`
@@ -209,4 +223,3 @@
 - [x] 2. Replace `isClient` logic in `sort-dropdown.tsx` with the existing `useMounted` hook.
 - [x] 3. Remove unused files `src/dummy.test.ts` and `prompt_task4_done.md`.
 - [x] 4. Run `npm test` to ensure all tests pass after refactor.
->>>>>>> 9702fd413fb578c1aa36778a4818d419517bf670

@@ -107,6 +107,7 @@ pnpm test:coverage
 1. Run `pnpm dev` to start the local server with hot reload.
 2. Use `pnpm lint` and `pnpm test:watch` while coding.
 3. Commit your changes and open a pull request when ready.
+4. Review the contributor guide in [AGENTS.md](AGENTS.md) before opening or reviewing a PR.
 
 ## Common Commands
 
@@ -251,3 +252,104 @@ The project features a custom dark theme and specific typography to enhance user
 
 *   **NocoDB Zod Parsing Errors:**
     *   If you encounter Zod parsing errors related to NocoDB data types, ensure the schemas in `src/lib/nocodb.ts` match the actual data structure returned by your NocoDB API. For example, the `Sentiment` field was initially expected as a string but returned as a number, requiring a schema update from `z.string()` to `z.number()`.
+
+---
+
+## NocoDB API Usage (v2)
+
+This project uses the NocoDB v2 API. For reliability and performance, we use table and project IDs and authenticate via the `xc-token` header.
+
+- Required env vars (IDs, not names):
+  - `NC_URL` – Base URL of NocoDB, e.g. `http://localhost:8080`
+  - `NC_TOKEN` – API token with access to the project/table
+  - `NOCODB_PROJECT_ID` – Project (base) ID, e.g. `phk8vxq6f1ev08h`
+  - `NOCODB_TABLE_ID` – Table ID, e.g. `m1lyoeqptp7fq5z`
+
+Important: NocoDB v2 APIs expect IDs. Using table names often works in some endpoints but is not guaranteed and can break filters or PATCH/DELETE.
+
+### Endpoints we use
+
+- List and query records (primary path used in this repo):
+  - `GET {NC_URL}/api/v2/tables/{tableId}/records`
+- Single record update/delete (primary path in `src/lib/nocodb.ts`):
+  - `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowId}`
+  - `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}`
+- Alternate, more explicit path (used in sibling variant under `vibed-yt-viewer/`):
+  - `GET|PATCH|DELETE {NC_URL}/api/v2/meta/projects/{projectId}/tables/{tableId}/records[/{rowId}]`
+
+Headers:
+
+```http
+xc-token: <NC_TOKEN>
+Content-Type: application/json
+```
+
+### Filtering (where)
+
+We use `where` to filter by fields, e.g. tag search over `Hashtags`:
+
+```text
+(Hashtags,ilike,%word1%)~and(Hashtags,ilike,%word2%)
+```
+
+See `fetchVideos({ tagSearchQuery: 'word1 word2' })` which builds the filter as shown. This was fixed to avoid an extra `)` that could cause empty results.
+
+### Pagination and fields
+
+- `limit` and `offset` are supported and handled by `fetchVideos`.
+- Use `fields=Title,Channel,ThumbHigh,...` to minimize payload. We provide an optional `fields` argument and validate responses with Zod.
+
+### Client functions
+
+The NocoDB client lives in `src/lib/nocodb.ts` and exposes:
+
+- `fetchVideos(options)` – list videos with pagination, sort, optional `fields`, and optional `tagSearchQuery`.
+- `fetchVideoByVideoId(videoId)` – load a single record by the `VideoID` column.
+- `updateVideo(recordIdOrVideoId, data)` – PATCH a record by numeric `Id` or by `VideoID` (auto-resolves numeric id).
+- `deleteVideo(recordIdOrVideoId)` – DELETE a record by numeric `Id` or `VideoID`.
+
+All functions:
+- Read config with `getNocoDBConfig()` from env vars.
+- Validate responses with Zod (`videoSchema`/`videoListItemSchema`).
+- Use preprocessors to convert NocoDB’s mixed types (e.g., newline- or comma-separated strings) into structured arrays.
+
+### Example usage
+
+```ts
+import { fetchVideos, fetchVideoByVideoId, updateVideo, deleteVideo } from '@/lib/nocodb';
+
+// 1) List videos with sorting and tag filter
+const { videos, pageInfo } = await fetchVideos({
+  sort: '-CreatedAt',
+  tagSearchQuery: 'ai finance',
+  fields: ['Id', 'Title', 'Channel', 'ThumbHigh', 'Hashtags']
+});
+
+// 2) Load a single video by its YouTube VideoID
+const video = await fetchVideoByVideoId('dQw4w9WgXcQ');
+
+// 3) Update rating (accepts numeric Id or VideoID)
+await updateVideo('dQw4w9WgXcQ', { ImportanceRating: 5 });
+
+// 4) Delete by numeric Id
+await deleteVideo(123);
+```
+
+Beginner tip: `updateVideo`/`deleteVideo` accept either the numeric `Id` or the `VideoID`. If you pass a string that isn’t an integer, we first resolve it to the numeric `Id` using `fetchVideoByVideoId`.
+
+### Schema validation and preprocessors
+
+We use Zod to strictly validate and normalize the data:
+
+- `videoSchema` – Full record for the detail page.
+- `videoListItemSchema` – Minimal record for the grid.
+
+Preprocessors in `src/lib/nocodb.ts` handle common NocoDB formats:
+
+- `stringToArrayOrNullPreprocessor` – converts newline-separated strings to `string[]` and handles empty objects.
+- `stringToLinkedRecordArrayPreprocessor` – converts comma-separated text or mixed inputs into arrays of linked-record-like objects (with `Title` / `name`).
+- `emptyObjectToNull` – normalizes `{}` to `null` when appropriate.
+- `ThumbHigh` – transformed to a single URL string for rendering.
+- Date fields – parsed with `z.coerce.date()` for robust ISO handling.
+
+Troubleshooting: If validation fails, we log the offending response and raise a `NocoDBValidationError` with precise Zod issues. Adjust the schema to match your actual NocoDB column formats.

@@ -26,6 +26,41 @@ Develop a modern, performant, and user-friendly web application for browsing, se
 - NocoDB v2 usage: endpoints `/api/v2/tables/{tableId}/records` with `xc-token` authentication; required env vars: `NC_URL`, `NC_TOKEN`, `NOCODB_PROJECT_ID`, `NOCODB_TABLE_ID`.
 - Video note upload, re-transcribe, and delete actions are robust with NocoDB v2 API.
 
+---
+
+## NocoDB v2 – Canonical Usage
+
+- Required environment variables (IDs, not names):
+  - `NC_URL` (e.g. `http://localhost:8080`)
+  - `NC_TOKEN` (API token)
+  - `NOCODB_PROJECT_ID` (e.g. `phk8vxq6f1ev08h`)
+  - `NOCODB_TABLE_ID` (e.g. `m1lyoeqptp7fq5z`)
+
+- Endpoints:
+  - List/query: `GET {NC_URL}/api/v2/tables/{tableId}/records`
+  - Update: `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowId}`
+  - Delete: `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}`
+  - Alternate explicit path (also supported in sibling workspace): `GET|PATCH|DELETE {NC_URL}/api/v2/meta/projects/{projectId}/tables/{tableId}/records[/{rowId}]`
+
+- Headers:
+  - `xc-token: <NC_TOKEN>`
+  - `Content-Type: application/json`
+
+- Filtering examples:
+  - Tag search: `(Hashtags,ilike,%word1%)~and(Hashtags,ilike,%word2%)`
+  - Detail fetch by VideoID: `(VideoID,eq,<videoId>)`
+
+- Validation & parsing: Always validate responses with Zod. Use preprocessors to normalize NocoDB formats (newline lists, linked records, empty objects). Dates use `z.coerce.date()`.
+
+## Contributor Checklist
+
+- Confirm env vars exist: `NC_URL`, `NC_TOKEN`, `NOCODB_PROJECT_ID`, `NOCODB_TABLE_ID`.
+- Prefer `fields=` selection for list/grid views to reduce payload.
+- When adding fields to schemas, update both `videoSchema` and `videoListItemSchema` intentionally. Add comments for beginners.
+- Update documentation after changes: `README.md`, `status.md`, `prompt.md`.
+- Write/adjust tests for schema and client functions when changing parsing logic.
+
+
 ## Development Rules & Preferences
 
 - **Refactor over Add:** When possible, refactor existing code to be more robust and performant rather than adding new, redundant code.
