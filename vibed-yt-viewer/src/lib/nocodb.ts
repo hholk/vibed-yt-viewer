@@ -453,10 +453,10 @@ export async function updateVideo(
   }
 
   // Build the URL for the PATCH request
-  // NocoDB v1 robust endpoint: /api/v1/db/data/noco/{projectName}/{tableName}/{rowId}
-  // Use project and table NAMES, not IDs. This is the most compatible and robust endpoint for PATCH/DELETE.
-  // Example: http://localhost:8080/api/v1/db/data/noco/MyProject/MyTable/123
-  const requestUrl = `${ncUrl}/api/v1/db/data/noco/${projectId}/${tableId}/${numericId}`;
+  // NocoDB v2 endpoint: /api/v2/meta/projects/{projectId}/tables/{tableId}/records/{rowId}
+  // Use project and table IDs. This is the most compatible and robust endpoint for PATCH/DELETE.
+  // Example: http://localhost:8080/api/v2/meta/projects/MyProject/tables/MyTable/records/123
+  const requestUrl = `${ncUrl}/api/v2/meta/projects/${projectId}/tables/${tableId}/records/${numericId}`;
 
   // --- DEBUG LOGGING ---
   console.log('=== UPDATE VIDEO DEBUG INFO ===');
@@ -475,7 +475,7 @@ export async function updateVideo(
   // --- END DEBUG LOGGING ---
 
   try {
-    // PATCH the video using v1 endpoint (project/table names, not IDs)
+    // PATCH the video using v2 endpoint (project/table IDs)
     const response = await apiClient.patch<z.infer<typeof videoSchema>>(
       requestUrl,
       updateData,
@@ -483,7 +483,7 @@ export async function updateVideo(
         headers: {
           'xc-token': token, // Auth token for NocoDB
           'Content-Type': 'application/json',
-        }, // No xc-project header needed for v1 endpoint
+        }, // No xc-project header needed for v2 endpoint
       }
     );
     // Log the response for debugging
@@ -576,10 +576,10 @@ export async function deleteVideo(
     throw new Error(`Could not find video with ID: ${recordIdOrVideoId}`);
   }
 
-  // NocoDB v1 robust endpoint: /api/v1/db/data/noco/{projectName}/{tableName}/{rowId}
-  // Use project and table NAMES, not IDs. This is the most compatible and robust endpoint for PATCH/DELETE.
-  // Example: http://localhost:8080/api/v1/db/data/noco/MyProject/MyTable/123
-  const requestUrl = `${url}/api/v1/db/data/noco/${projectId}/${tableId}/${numericId}`;
+  // NocoDB v2 endpoint: /api/v2/meta/projects/{projectId}/tables/{tableId}/records/{rowId}
+  // Use project and table IDs. This is the most compatible and robust endpoint for PATCH/DELETE.
+  // Example: http://localhost:8080/api/v2/meta/projects/MyProject/tables/MyTable/records/123
+  const requestUrl = `${url}/api/v2/meta/projects/${projectId}/tables/${tableId}/records/${numericId}`;
   console.log('[deleteVideo] DELETE to:', requestUrl);
 
   try {
@@ -628,7 +628,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
   options?: FetchVideosOptions<T>
 ): Promise<{ videos: z.infer<T>[]; pageInfo: PageInfo }> {
   // Only extract used variables to avoid lint errors
-const { url, token, tableId } = getNocoDBConfig({
+const { url, token, projectId, tableId } = getNocoDBConfig({
     projectId: options?.ncProjectId,
     tableId: options?.ncTableId,
   });
@@ -673,8 +673,10 @@ const { url, token, tableId } = getNocoDBConfig({
   if (options?.tagSearchQuery) {
     const searchWords = options.tagSearchQuery.trim().split(/\s+/);
     if (searchWords.length > 0) {
+      // Build NocoDB v2 where filter using ilike on Hashtags for each word
+      // Correct format for each condition: (Hashtags,ilike,%<word>%)
       const whereConditions = searchWords
-        .map((word: string) => `(Hashtags,ilike,%${word}%))`) 
+        .map((word: string) => `(Hashtags,ilike,%${word}%)`)
         .join('~and');
       params.where = whereConditions;
     }
@@ -688,7 +690,7 @@ const { url, token, tableId } = getNocoDBConfig({
     try {
       // First try with all requested fields
       response = await apiClient.get(
-        `${url}/api/v2/tables/${tableId || tableId}/records`,
+        `${url}/api/v2/meta/projects/${projectId}/tables/${tableId}/records`,
         {
           headers: {
           'xc-token': token, // Auth token for NocoDB
@@ -713,7 +715,7 @@ const { url, token, tableId } = getNocoDBConfig({
           );
           
           response = await apiClient.get(
-            `${url}/api/v2/tables/${tableId || tableId}/records`,
+            `${url}/api/v2/meta/projects/${projectId}/tables/${tableId}/records`,
             {
               headers: { 'xc-token': token },
               params: {
@@ -809,7 +811,7 @@ export async function fetchVideoByVideoId(videoId: string, ncProjectIdParam?: st
   }
 
   // Only extract used variables to avoid lint errors
-const { url, token, tableId } = getNocoDBConfig({
+const { url, token, projectId, tableId } = getNocoDBConfig({
     projectId: ncProjectIdParam,
     tableId: ncTableIdParam,
   });
@@ -818,7 +820,7 @@ const { url, token, tableId } = getNocoDBConfig({
   try {
     // First try with all fields
     const response = await apiClient.get<NocoDBResponse<z.infer<typeof videoSchema>>>(
-      `${url}/api/v2/tables/${tableId || tableId}/records`,
+      `${url}/api/v2/meta/projects/${projectId}/tables/${tableId}/records`,
       {
         headers: { 'xc-token': token },
         params: {

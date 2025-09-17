@@ -28,6 +28,18 @@
 - **NocoDB API v2 tableId Refactor**
   - Refactor NocoDB integration to use table ID (NOCODB_TABLE_ID) for all API v2 requests, removing table name usage. Updated env, code, and docs accordingly. Strict required env vars: NC_URL, NC_TOKEN, NOCODB_PROJECT_ID, NOCODB_TABLE_ID.
 
+- **NocoDB Tag Search Filter Fix**
+  - **File:** `src/lib/nocodb.ts`
+  - **Function:** `fetchVideos`
+  - **Change:** Corrected `where` clause construction for `tagSearchQuery` by removing an extra closing parenthesis in each `(Hashtags,ilike,%word%)` condition. Previously it built `(Hashtags,ilike,%word%))`, which caused NocoDB to reject the filter and return no rows.
+  - **Why it mattered:** The malformed filter resulted in empty lists, making it seem like data could not be displayed from NocoDB.
+  - **Auth & Endpoint:** Using NocoDB v2 endpoint `/api/v2/tables/{tableId}/records` with `xc-token` header.
+  - **Environment:**
+    - `NC_URL=http://localhost:8080`
+    - `NC_TOKEN=9eUdCOkB9_2RbIIecQwvIFOC_XBn1iAsrYVgu7VS`
+    - `NOCODB_PROJECT_ID=phk8vxq6f1ev08h`
+    - `NOCODB_TABLE_ID=m1lyoeqptp7fq5z`
+
 - **5-Star Rating & Personal Comments**
 
   - Added interactive 5-star rating component for the `ImportanceRating` field

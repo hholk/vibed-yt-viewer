@@ -615,8 +615,10 @@ const { url, token, tableId } = getNocoDBConfig({
   if (options?.tagSearchQuery) {
     const searchWords = options.tagSearchQuery.trim().split(/\s+/);
     if (searchWords.length > 0) {
+      // Build NocoDB v2 where filter using ilike on Hashtags for each word
+      // Correct format for each condition: (Hashtags,ilike,%<word>%)
       const whereConditions = searchWords
-        .map((word: string) => `(Hashtags,ilike,%${word}%))`) 
+        .map((word: string) => `(Hashtags,ilike,%${word}%)`)
         .join('~and');
       params.where = whereConditions;
     }

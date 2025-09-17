@@ -16,14 +16,15 @@ Develop a modern, performant, and user-friendly web application for browsing, se
 - **Testing:** Use Vitest and React Testing Library to write meaningful tests for components and utility functions.
 
 ## Outstanding Issues
-- None. All critical video actions (Personal Note upload, "Neu Transkribieren", Delete Video) are now robust, performant, and fully functional with NocoDB v2 API.
+- None. Recent bug in tag search filter for NocoDB `where` clauses has been fixed. All critical video actions (Personal Note upload, "Neu Transkribieren", Delete Video) remain robust and fully functional with NocoDB v2 API.
 
 ## User Rules & Implementation
 - All fixes use context7 for latest, stable, robust, and performant code.
 - Comments are added for beginners.
 - Boilerplate code is always up to date.
-- After every task, prompt.md, readme.md, and status.md are updated.
-- Video note upload, re-transcribe, and delete actions are fixed and robust with NocoDB v2 API.
+- After every task, `prompt.md`, `README.md`, and `status.md` are updated.
+- NocoDB v2 usage: endpoints `/api/v2/tables/{tableId}/records` with `xc-token` authentication; required env vars: `NC_URL`, `NC_TOKEN`, `NOCODB_PROJECT_ID`, `NOCODB_TABLE_ID`.
+- Video note upload, re-transcribe, and delete actions are robust with NocoDB v2 API.
 
 ## Development Rules & Preferences
 

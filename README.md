@@ -52,15 +52,15 @@ If you use VS Code, the repository includes a preconfigured **dev container**. I
    ```
 
 3. **Set up environment variables**
-   Create a `.env.local` file (or `.env`) in the project root with the following variables:
+   Create a `.env.local` file (or `.env`) in the project root with the following variables (all are required):
    ```env
-   # NocoDB connection configuration
+   # NocoDB connection (v2 API)
    NC_URL=http://localhost:8080
    NC_TOKEN=your_nocodb_token
-   NOCODB_TABLE_ID=youtubeTranscripts
-   # NC_PROJECT_ID=phk8vxq6f1ev08h
+   NOCODB_PROJECT_ID=your_project_id          # e.g. phk8vxq6f1ev08h
+   NOCODB_TABLE_ID=your_table_id              # e.g. m1lyoeqptp7fq5z
    ```
-   > **Note for beginners:** Only these three variables are needed to connect the app to your NocoDB instance. Note that `NOCODB_TABLE_ID` is required for all API v2 calls; table names are no longer supported. Do not use any other variable names for NocoDB configuration.
+   > **Note for beginners:** The app uses NocoDB API v2 and therefore requires the table ID, not the table name. All requests authenticate using the `xc-token` header.
 
 4. **Start the development server**
    ```bash
@@ -72,12 +72,12 @@ If you use VS Code, the repository includes a preconfigured **dev container**. I
 
 ## Environment Setup
 
-The application expects a running NocoDB instance and a few environment variables. Create a `.env.local` file with content similar to:
+The application expects a running NocoDB instance and the environment variables above. Create a `.env.local` file with content similar to:
 ```env
 NC_URL=http://localhost:8080
 NC_TOKEN=your_nocodb_token
-NOCODB_TABLE_ID=youtubeTranscripts
-# NC_PROJECT_ID=phk8vxq6f1ev08h
+NOCODB_PROJECT_ID=phk8vxq6f1ev08h
+NOCODB_TABLE_ID=m1lyoeqptp7fq5z
 ```
 
 If you do not have NocoDB running locally you can start one with Docker:
