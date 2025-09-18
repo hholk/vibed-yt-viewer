@@ -1,6 +1,6 @@
 "use client";
 import useSWR from "swr";
-import { fetchVideoByVideoId, type Video, type VideoListItem } from "@/lib/nocodb";
+import { fetchVideoByVideoId, type Video, type VideoListItem } from "@/features/videos/api/nocodb";
 import { VideoDetailPageContent } from "./VideoDetailPageContent";
 
 interface VideoDetailPageClientProps {

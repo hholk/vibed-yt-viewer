@@ -1,14 +1,8 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import type { Video, VideoListItem } from '@/lib/nocodb';
-
-const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div 
-    className={`animate-pulse bg-neutral-800 rounded-md ${className || ''}`}
-    {...props}
-  />
-);
+import type { Video, VideoListItem } from '@/features/videos/api/nocodb';
+import { Skeleton } from '@/shared/components/ui/skeleton';
 
 interface VideoDetailPageWrapperProps {
   video: Video;

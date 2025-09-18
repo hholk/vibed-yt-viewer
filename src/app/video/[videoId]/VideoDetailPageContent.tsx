@@ -6,11 +6,11 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy, Trash2, XCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import type { Video, VideoListItem } from '@/lib/nocodb';
-import { updateVideo, deleteVideo } from '@/lib/nocodb';
-import { StarRating } from '@/components/StarRating';
+import type { Video, VideoListItem } from '@/features/videos/api/nocodb';
+import { updateVideo, deleteVideo } from '@/features/videos/api/nocodb';
+import { StarRating } from '@/features/videos/components';
 
-export type { Video, VideoListItem } from '@/lib/nocodb';
+export type { Video, VideoListItem } from '@/features/videos/api/nocodb';
 
 type SafeReactMarkdownProps = {
   children: string;

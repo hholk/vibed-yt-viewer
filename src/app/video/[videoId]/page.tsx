@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { fetchVideoByVideoId, fetchAllVideos } from '@/lib/nocodb';
+import { fetchVideoByVideoId, fetchAllVideos } from '@/features/videos/api/nocodb';
 import { notFound } from 'next/navigation';
 import { VideoDetailPageContent } from './VideoDetailPageContent';
 
@@ -56,7 +56,7 @@ export default async function VideoDetailPage({
   // Note: 'video' will be defined here due to the notFound() check above.
   const allVideoListItems = await fetchAllVideos({
     sort: currentSort,
-    fields: ['Id', 'VideoID', 'Title'], // Kept fields consistent with original
+    fields: ['Id', 'rowId', 'VideoID', 'Title'],
   });
 
   // The if (!video) check was here, but it's now redundant as it's performed earlier.

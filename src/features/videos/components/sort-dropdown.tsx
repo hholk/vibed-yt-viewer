@@ -3,14 +3,14 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useMounted } from "@/hooks/use-mounted";
+import { useMounted } from "@/shared/hooks/use-mounted";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/shared/components/ui/select";
 
 const SORT_STORAGE_KEY = "yt-viewer-sort-preference";
 

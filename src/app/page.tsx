@@ -1,7 +1,7 @@
-import { fetchAllVideos, type VideoListItem, videoListItemSchema } from "@/lib/nocodb";
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { fetchAllVideos, type VideoListItem, videoListItemSchema } from "@/features/videos/api/nocodb";
+import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Terminal } from 'lucide-react';
-import { VideoListClient } from '@/components/video-list-client';
+import { VideoListClient } from '@/features/videos/components';
 
 export default async function HomePage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ sort?: string; [key: string]: string | string[] | undefined }> }) {
   let videos: VideoListItem[] = [];
@@ -16,6 +16,7 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
       sort: currentSort,
       fields: [
         'Id',
+        'rowId',
         'Title',
         'ThumbHigh',
         'Channel',

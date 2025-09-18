@@ -1,17 +1,25 @@
 # Project Status
 
 ## Done
+- **Homepage Video List Resilience (2025-09-20)**
+  - Updated the NocoDB client to strip or drop field selections when the API responds with `FIELD_NOT_FOUND`, so homepage fetches fall back gracefully instead of caching empty lists. (`src/features/videos/api/nocodb.ts`)
+- **NocoDB Client Refresh (2025-09-18)**
+  - Single-row mutations now follow a combined ladder: v2 row id → v2 numeric path → v2 bulk (`filter`/`records`) → v1 slug endpoint, ensuring star ratings & notes persist even when `_rowId` is absent.
+  - Configuration now requires both `NOCODB_TABLE_ID` and `NOCODB_TABLE_NAME` so the v1 fallback always has a deterministic slug.
+  - `fetchSingleVideoRecord`, `updateVideo`, and `deleteVideo` share the same ordered endpoint attempts; list views remain on the v2 table-id API.
+  - `resolveTableIdentifiers` simply normalises the configured identifiers and caches them.
+  - `pnpm ensure:video <videoId> [rating] [comment]` exercises the full ladder; install `tsx` via `pnpm install` before running it locally.
 - Personal Note upload working reliably (updateVideo, NocoDB v2)
 - "Neu Transkribieren" button fixed (clears DetailedNarrativeFlow, updateVideo, NocoDB v2)
 - Delete Video action working (deleteVideo, NocoDB v2)
 - **Search Tag Parsing Refactor**
-  - **File:** `src/lib/nocodb.ts`
+  - **File:** `src/features/videos/api/nocodb.ts`
   - **Change:** Updated Zod schemas to use the `stringToLinkedRecordArrayPreprocessor` for various fields, ensuring that comma-separated strings from NocoDB are correctly parsed into individual tags.
   - **Affected Fields:** `Tags`, `Categories`, `Products`, `Speakers`, `Locations`, `Events`.
-  - **Testing:** Fixed failing tests in `src/lib/nocodb.test.ts` by properly mocking all required environment variables for the `getNocoDBConfig` function.
+  - **Testing:** Fixed failing tests in `src/features/videos/api/nocodb.test.ts` by properly mocking all required environment variables for the `getNocoDBConfig` function.
 
 - **Local Development Environment Setup**
-  - Repository cloned to `/Users/henrikholkenbrink/yt-viewer/vibed-yt-viewer`
+  - Repository cloned to `/Users/henrikholkenbrink/yt-viewer`
   - Dependencies installed with `pnpm`
   - `.env` configured:
     - `NC_URL=http://localhost:8080`
@@ -43,7 +51,7 @@
       - DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}
 
 - **NocoDB Tag Search Filter Fix**
-  - **File:** `src/lib/nocodb.ts`
+  - **File:** `src/features/videos/api/nocodb.ts`
   - **Function:** `fetchVideos`
   - **Change:** Corrected `where` clause construction for `tagSearchQuery` by removing an extra closing parenthesis in each `(Hashtags,ilike,%word%)` condition. Previously it built `(Hashtags,ilike,%word%))`, which caused NocoDB to reject the filter and return no rows.
   - **Why it mattered:** The malformed filter resulted in empty lists, making it seem like data could not be displayed from NocoDB.
@@ -67,7 +75,7 @@
 - Markdown rendering for video detail page fields: Actionable Advice, TLDR, Main Summary, Key Numbers Data, Key Examples, Detailed Narrative Flow, Memorable Quotes, Memorable Takeaways (via react-markdown in [videoId]/page.tsx)
 
 * **Fix NocoDB `Sentiment` field parsing (Error 1 & 4):**
-  - **File:** `src/lib/nocodb.ts`
+  - **File:** `src/features/videos/api/nocodb.ts`
   - **Change:** Updated `videoSchema` for `Sentiment` from `z.string()` to `z.number()`.
   - **Reason:** To resolve Zod parsing error "Sentiment: Expected string, received number" as NocoDB returns this field as a number.
 
@@ -81,11 +89,11 @@
   - Brand color: CSS variable `--color-brand: hsl(0, 0%, 20%)` (dark grey) in `src/app/globals.css`.
   - Fluid typography: CSS variable `--font-size-fluid-base` in `src/app/globals.css`.
   - Integrated with Tailwind CSS in `tailwind.config.ts` and `src/app/globals.css`.
-- **NocoDB API Client (`src/lib/nocodb.ts`) & Schema Refinement**
-- **Video List Page (`src/app/page.tsx`, `src/lib/nocodb.ts`, styling files) & Theming**
+- **NocoDB API Client (`src/features/videos/api/nocodb.ts`) & Schema Refinement**
+- **Video List Page (`src/app/page.tsx`, `src/features/videos/api/nocodb.ts`, styling files) & Theming**
   - **Data Fetching & Display:**
     - Implemented a Next.js Server Component (`src/app/page.tsx`) to display all videos from NocoDB.
-    - `fetchVideos` in `src/lib/nocodb.ts` updated to handle NocoDB pagination, ensuring all videos are loaded.
+    - `fetchVideos` in `src/features/videos/api/nocodb.ts` updated to handle NocoDB pagination, ensuring all videos are loaded.
     - `nocodbResponseSchema` updated for pagination (`pageInfo`).
     - Videos displayed in a responsive grid with `next/image` for thumbnails (domain `i.ytimg.com` whitelisted in `next.config.mjs`).
     - Includes error handling and empty state messages.
@@ -105,26 +113,26 @@
     - `ThumbHigh` field transformed from NocoDB attachment array to a direct image URL string (or `null`).
     - Optional text fields (`Channel`, `Description`, `PersonalComment`) and `ImportanceRating` now default to `null` if not present in API response, resolving test inconsistencies.
   - `fetchVideos` function to get and validate video records, dynamically reading environment variables (`NC_URL`, `NC_TOKEN`, `NOCODB_TABLE_ID`).
-  - Vitest tests (`src/lib/nocodb.test.ts`): All tests passing. Comprehensive mocking of Axios for various scenarios (success, API errors, invalid data structure, missing env vars). Tests confirm correct parsing of refined schema, including optional fields.
+  - Vitest tests (`src/features/videos/api/nocodb.test.ts`): All tests passing. Comprehensive mocking of Axios for various scenarios (success, API errors, invalid data structure, missing env vars). Tests confirm correct parsing of refined schema, including optional fields.
   - Local NocoDB connection settings for development/testing: `NC_URL=http://nocodb:8080` (Docker network hostname), `projectId='phk8vxq6f1ev08h'` (hardcoded in `nocodb.ts`), `NC_TOKEN=<user_provided_token>`, `NOCODB_TABLE_ID=youtubeTranscripts` (user to set these in `.env.local`).
-- **NocoDB API Client (`src/lib/nocodb.ts`) String-to-Array Parsing Fix:**
+- **NocoDB API Client (`src/features/videos/api/nocodb.ts`) String-to-Array Parsing Fix:**
   - Resolved Zod parsing errors where NocoDB API returned newline-separated strings for fields expected as arrays in `fetchVideoByVideoId`.
   - Introduced `stringToArrayOrNullPreprocessor`: Converts newline-separated strings to `string[]`, trims values, and handles empty/null inputs. Applied to fields like `MemorableQuotes`, `MemorableTakeaways`, `Hashtags`, `KeyExamples`, `InvestableAssets`, `PrimarySources`, `TechnicalTerms`.
   - Introduced `stringToLinkedRecordArrayPreprocessor`: Converts newline-separated strings to `LinkedRecordItemSchema[]` (objects like `{ Title: '...', name: '...' }`). Applied to fields like `Indicators`, `Trends`, `Persons`, `Companies`, `Institutions`.
-  - These preprocessors are now used in `videoSchema` in `src/lib/nocodb.ts`, ensuring robust data parsing.
-- **NocoDB API Client (`src/lib/nocodb.ts`) Datetime Parsing Fix:**
+  - These preprocessors are now used in `videoSchema` in `src/features/videos/api/nocodb.ts`, ensuring robust data parsing.
+- **NocoDB API Client (`src/features/videos/api/nocodb.ts`) Datetime Parsing Fix:**
   - Resolved 'Invalid datetime' errors for `CreatedAt`, `UpdatedAt`, and `PublishedAt` fields.
   - Changed Zod schema in `videoSchema` from `z.string().datetime({ offset: true })` to `z.coerce.date()` to correctly parse ISO 8601 date strings (e.g., `"2024-07-26T00:25:42.000Z"`).
 - **Video Sorting (Task 4.5)**
   - Implemented video sorting functionality on the main video list page (`src/app/page.tsx`).
-  - **NocoDB API (`src/lib/nocodb.ts`):** `fetchVideos` function now accepts an optional `sort` string (e.g., `Title`, `-ImportanceRating`) and passes it as a query parameter to the NocoDB API.
-  - **Sort Dropdown (`src/components/sort-dropdown.tsx`):** Created a client component using shadcn/ui `Select`.
+  - **NocoDB API (`src/features/videos/api/nocodb.ts`):** `fetchVideos` function now accepts an optional `sort` string (e.g., `Title`, `-ImportanceRating`) and passes it as a query parameter to the NocoDB API.
+  - **Sort Dropdown (`src/features/videos/components/sort-dropdown.tsx`):** Created a client component using shadcn/ui `Select`.
     - Options include sorting by Title (A-Z, Z-A), Channel (A-Z, Z-A), Importance (High-Low, Low-High), Date Added (Newest/Oldest - `CreatedAt`), and Date Updated (Newest/Oldest - `UpdatedAt`).
     - Default sort: Date Added, Newest First (`-CreatedAt`).
     - Updates URL query parameter (`?sort=...`) on selection change using `next/navigation` (`useRouter`, `useSearchParams`).
   - **Page Integration (`src/app/page.tsx`):** Reads the `sort` query parameter from `searchParams` and passes it to `fetchVideos`. Renders the `SortDropdown` component in the top-right corner.
   - **Dependencies:** Added `Select` component from shadcn/ui.
-- **NocoDB `ThumbHigh` Parsing Fix (`src/lib/nocodb.ts`)**:
+- **NocoDB `ThumbHigh` Parsing Fix (`src/features/videos/api/nocodb.ts`)**:
   - Resolved Zod parsing error: `ThumbHigh: Expected string, received array`.
   - Modified the `ThumbHigh` field definition within `videoSchema` to use `z.preprocess()`.
   - This ensures the incoming array of NocoDB attachment objects is transformed to a single URL string (or `null`) _before_ Zod validation, aligning the schema with the actual data structure and processing needs.
@@ -133,13 +141,12 @@
   - **Page Structure (`src/app/video/[videoId]/page.tsx`):**
     - Server component fetches the current video's full details using `fetchVideoByVideoId`.
     - Fetches a sorted list of all videos (ID, VideoID, Title, Channel, Importance, CreatedAt, UpdatedAt) using `fetchAllVideos` and a `navVideoSchema` for navigation purposes.
-    - Passes fetched data to `VideoDetailClientView`.
-  - **Client View (`src/components/video-detail-client-view.tsx`):**
-    - Renders detailed video information in a structured layout.
-    - Implements "Previous" and "Next" navigation buttons.
-    - Enables keyboard navigation (ArrowLeft for previous, ArrowRight for next).
+    - Passes fetched data to the client page component for rendering.
+  - **Client View (`src/features/videos/components/video-detail-client-view.tsx`, removed during 2025-02 refactor):**
+    - Previously rendered detailed video information with navigation controls.
+    - Functionality now lives directly in `src/app/video/[videoId]/VideoDetailPageContent.tsx`.
     - Handles UI states for first/last video in the navigation sequence.
-  - **Data Fetching (`src/lib/nocodb.ts`):**
+  - **Data Fetching (`src/features/videos/api/nocodb.ts`):**
     - `fetchVideoByVideoId(id: number)`: Retrieves a single video by its numeric ID.
     - `fetchAllVideos`: Enhanced to accept a `fields` parameter to limit columns fetched from NocoDB, used by `navVideoSchema`.
   - **Schema & Types:**
@@ -147,7 +154,7 @@
     - `NavVideo` type in `VideoDetailClientView`: Adjusted to allow nullable fields (Title, Channel, etc.) to align with `navVideoSchema` and actual data, resolving type errors.
     - `videoSchema` in `nocodb.ts`: Corrected types for fields like `KeyNumbersData`, `KeyExamples` from array to string based on actual data content.
 - **Video Detail View & Schema Enhancement (Task 4.8)**
-  - \*\*Schema Update (`src/lib/nocodb.ts` - `videoSchema`):
+  - \*\*Schema Update (`src/features/videos/api/nocodb.ts` - `videoSchema`):
     - Added new fields: `KeyNumbersData` (string), `KeyExamples` (string), `BookMediaRecommendations` (array of string), `RelatedURLs` (array of string/URL), `VideoGenre` (string), `Persons` (array of linked records), `InvestableAssets` (array of string), `TickerSymbol` (string), `Institutions` (array of linked records), `EventsFairs` (array of linked records), `DOIs` (array of string), `PrimarySources` (array of string), `Sentiment` (string), `SentimentReason` (string), `TechnicalTerms` (array of string).
     - Re-added `Companies` (array of linked records).
     - All new fields are optional and nullable.
@@ -206,8 +213,8 @@
 
 ## Refactoring Plan (Meta Standards)
 
-- [x] 1. Extract render helper functions from `video-detail-client-view.tsx` into `src/components/render-utils.tsx`.
-- [x] 2. Replace duplicated caching logic in `src/lib/nocodb.ts` with generic functions in `src/lib/cache.ts`.
+- [x] 1. Extract render helper functions from `video-detail-client-view.tsx` into `src/features/videos/components/render-utils.tsx` (helpers retired in 2025-02 refactor).
+- [x] 2. Replace duplicated caching logic in `src/features/videos/api/nocodb.ts` with generic functions in `src/features/videos/api/cache.ts`.
 - [x] 3. Simplify filter option collection in `video-list-client.tsx` using a configuration-driven approach.
 - [x] 4. Update existing files to use new helpers without changing functionality.
 - [x] 5. Run and pass tests using `pnpm test`.

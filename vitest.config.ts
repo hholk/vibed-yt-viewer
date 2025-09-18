@@ -11,9 +11,10 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'], // Glob pattern for test files
     alias: {
       '@': path.resolve(__dirname, './src'),
+      'next/image': path.resolve(__dirname, './src/__mocks__/next/image.ts'),
     },
     // For UI mode: `pnpm test:ui`
-    ui: true,
+    ui: process.env.VITEST_UI === '1',
     // Disable automatically opening the browser when running non-UI tests
     open: false,
   },

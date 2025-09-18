@@ -8,8 +8,16 @@
 import React from 'react';
 
 function MockedImage(props: { [key: string]: unknown }) {
-  // Accepts all props, ignores Next.js-specific ones not used by <img>
-  return React.createElement('img', props);
+  const rest = Object.fromEntries(
+    Object.entries(props).filter(([key]) =>
+      key !== 'fill' &&
+      key !== 'priority' &&
+      key !== 'loader' &&
+      key !== 'unoptimized'
+    ),
+  );
+
+  return React.createElement('img', rest);
 }
 
 export default MockedImage;

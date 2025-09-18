@@ -35,12 +35,12 @@ Develop a modern, performant, and user-friendly web application for browsing, se
   - `NC_TOKEN` (API token)
   - `NOCODB_PROJECT_ID` (e.g. `phk8vxq6f1ev08h`)
   - `NOCODB_TABLE_ID` (e.g. `m1lyoeqptp7fq5z`)
+  - `NOCODB_TABLE_NAME` (slug, required so stars/notes can fall back to the v1 route)
 
 - Endpoints:
   - List/query: `GET {NC_URL}/api/v2/tables/{tableId}/records`
-  - Update: `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowId}`
-  - Delete: `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}`
-  - Alternate explicit path (also supported in sibling workspace): `GET|PATCH|DELETE {NC_URL}/api/v2/meta/projects/{projectId}/tables/{tableId}/records[/{rowId}]`
+  - Update: `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowId}` (pref) → `/records/{numericId}` (fallback)
+  - Delete: `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}` (pref) → `/records/{numericId}` (fallback)
 
 - Headers:
   - `xc-token: <NC_TOKEN>`

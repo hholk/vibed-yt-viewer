@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { SortDropdown } from "./sort-dropdown";
 import { VideoCard } from "./video-card";
-import { Badge } from "@/components/ui/badge";
-import type { VideoListItem } from "@/lib/nocodb";
+import { Badge } from "@/shared/components/ui/badge";
+import type { VideoListItem } from "@/features/videos/api/nocodb";
 import { X } from "lucide-react";
 
 // extractTitles takes an array of strings or objects with Title/name and returns an array of strings for filtering/searching.

@@ -8,7 +8,7 @@ This document describes the overall architecture of the YouTube Video Viewer, wi
 - TypeScript across the stack.
 - Tailwind CSS + shadcn/ui for UI primitives and consistent styling.
 - NocoDB v2 as the backend datastore exposed via REST.
-- Axios-based API client in `src/lib/nocodb.ts` with strict Zod validation and robust preprocessing of NocoDB responses.
+- Axios-based API client in `src/features/videos/api/nocodb.ts` with strict Zod validation and robust preprocessing of NocoDB responses.
 - Vitest for unit tests. React Testing Library for component tests.
 
 ## High-Level Data Flow
@@ -16,9 +16,9 @@ This document describes the overall architecture of the YouTube Video Viewer, wi
 ```mermaid
 sequenceDiagram
   participant UI as UI (Pages/Components)
-  participant Client as NocoDB Client (src/lib/nocodb.ts)
+  participant Client as NocoDB Client (src/features/videos/api/nocodb.ts)
   participant Noco as NocoDB API (v2)
-  participant Cache as Simple Cache (src/lib/cache.ts)
+  participant Cache as Simple Cache (src/features/videos/api/cache.ts)
 
   UI->>Client: fetchVideos({ sort, fields, tagSearchQuery })
   Client->>Cache: getFromCache(key?)
@@ -46,6 +46,11 @@ sequenceDiagram
   UI->>Client: updateVideo(recordIdOrVideoId, data)
   Client->>Client: resolveNumericId (may call fetchVideoByVideoId)
   Client->>Noco: PATCH /api/v2/tables/{tableId}/records/{rowId}
+  alt rowId missing/404
+    Client->>Noco: PATCH /api/v2/tables/{tableId}/records/{Id}
+    alt numeric path 404
+      Client->>Noco: PATCH /api/v2/tables/{tableId}/records (filter/records payload)
+  end
   Noco-->>Client: Updated record
   Client->>Cache: Update cache (VideoID and Id)
   Client->>UI: Updated video
@@ -53,6 +58,11 @@ sequenceDiagram
   UI->>Client: deleteVideo(recordIdOrVideoId)
   Client->>Client: resolveNumericId
   Client->>Noco: DELETE /api/v2/tables/{tableId}/records/{rowId}
+  alt rowId missing/404
+    Client->>Noco: DELETE /api/v2/tables/{tableId}/records/{Id}
+    alt numeric path 404
+      Client->>Noco: DELETE /api/v2/tables/{tableId}/records (filter/rows payload)
+  end
   Noco-->>Client: 204 No Content
   Client->>Cache: Invalidate cache
   Client->>UI: void
@@ -60,20 +70,21 @@ sequenceDiagram
 
 ## Key Modules
 
-- `src/lib/nocodb.ts`
-  - `getNocoDBConfig()` reads `NC_URL`, `NC_TOKEN`, `NOCODB_PROJECT_ID`, `NOCODB_TABLE_ID`.
+- `src/features/videos/api/nocodb.ts`
+  - `getNocoDBConfig()` reads `NC_URL`, `NC_TOKEN`, `NOCODB_PROJECT_ID`, `NOCODB_TABLE_ID`; `NOCODB_TABLE_NAME` is optional and used for diagnostics.
+  - `resolveTableIdentifiers()` normalises the v2 table id via `/api/v2/meta/projects/{projectId}/tables` and `/api/v2/tables/{tableId}` per the NocoDB docs.
   - `fetchVideos()` with pagination, sort, optional `fields`, and tag search via `where` (ilike on `Hashtags`).
   - `fetchVideoByVideoId()` with `(VideoID,eq,<videoId>)`.
   - `updateVideo()`/`deleteVideo()` with automatic numeric Id resolution.
   - Zod schemas (`videoSchema`, `videoListItemSchema`) + preprocessors for robust parsing.
 
-- `src/components/`
+- `src/features/videos/components/`
   - Grid/list rendering, `StarRating`, and detail page client view.
 
 - `src/app/`
   - Server components (e.g. `src/app/page.tsx`, `src/app/video/[videoId]/page.tsx`) fetch data on the server and pass to client components.
 
-- `src/lib/cache.ts`
+- `src/features/videos/api/cache.ts`
   - Minimal cache to store single video responses by `VideoID`/`Id`.
 
 ## NocoDB Integration
@@ -82,12 +93,15 @@ sequenceDiagram
   - `NC_URL` – e.g. `http://localhost:8080`
   - `NC_TOKEN` – API token
   - `NOCODB_PROJECT_ID` – e.g. `phk8vxq6f1ev08h`
-  - `NOCODB_TABLE_ID` – e.g. `m1lyoeqptp7fq5z`
+  - `NOCODB_TABLE_ID` – canonical v2 hash (e.g. `m1lyoeqptp7fq5z`) required by all requests.
+  - `NOCODB_TABLE_NAME` – optional slug (useful for logging or admin context only).
 
 - Endpoints (primary):
+  - Metadata discovery: `GET {NC_URL}/api/v2/meta/projects/{projectId}/tables`
+  - Table metadata lookup: `GET {NC_URL}/api/v2/tables/{tableId}`
   - `GET {NC_URL}/api/v2/tables/{tableId}/records`
-  - `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowId}`
-  - `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}`
+  - `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowIdOrId}` (row-specific v2 endpoint)
+  - `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowIdOrId}` (row-specific v2 endpoint)
 
 - Headers:
   - `xc-token: <NC_TOKEN>`
@@ -131,13 +145,18 @@ yt-viewer/
 ├─ src/
 │  ├─ app/
 │  │  └─ video/[videoId]/
-│  ├─ components/
-│  └─ lib/
-│     └─ nocodb.ts
+│  ├─ features/
+│  │  └─ videos/
+│  │     ├─ api/
+│  │     └─ components/
+│  └─ shared/
+│     ├─ components/
+│     └─ utils/
+├─ scripts/
+│  └─ ensure-video-state.ts
 ├─ README.md
-├─ prompt.md
-├─ status.md
-├─ agent.md
+├─ SETUP.md
+├─ AGENTS.md
 └─ architecture.md (this file)
 ```
 

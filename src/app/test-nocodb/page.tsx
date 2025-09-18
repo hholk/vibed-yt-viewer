@@ -1,5 +1,5 @@
 
-import { fetchVideos } from '@/lib/nocodb'; 
+import { fetchVideos } from '@/features/videos/api/nocodb'; 
 import Link from 'next/link';
 
 async function getData() {

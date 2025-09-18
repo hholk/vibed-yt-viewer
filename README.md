@@ -58,9 +58,11 @@ If you use VS Code, the repository includes a preconfigured **dev container**. I
    NC_URL=http://localhost:8080
    NC_TOKEN=your_nocodb_token
    NOCODB_PROJECT_ID=your_project_id          # e.g. phk8vxq6f1ev08h
-   NOCODB_TABLE_ID=your_table_id              # e.g. m1lyoeqptp7fq5z
+   NOCODB_TABLE_ID=your_table_id              # e.g. m1lyoeqptp7fq5z (opaque v2 id)
+   # Optional: human-readable slug for diagnostics/logging
+   # NOCODB_TABLE_NAME=youtubeTranscripts
    ```
-   > **Note for beginners:** The app uses NocoDB API v2 and therefore requires the table ID, not the table name. All requests authenticate using the `xc-token` header.
+   > **Note for beginners:** The client now follows the official NocoDB v2 guidance (see the "Tables API" documentation and the StackOverflow discussion on PATCHing rows via `_rowId`). Provide the opaque `NOCODB_TABLE_ID` from the v2 UI/API and ensure `_rowId` support is enabled in your table. `NOCODB_TABLE_NAME` is optional and used only for diagnostics. All requests authenticate via the `xc-token` header.
 
 4. **Start the development server**
    ```bash
@@ -78,6 +80,8 @@ NC_URL=http://localhost:8080
 NC_TOKEN=your_nocodb_token
 NOCODB_PROJECT_ID=phk8vxq6f1ev08h
 NOCODB_TABLE_ID=m1lyoeqptp7fq5z
+# Optional diagnostic slug
+# NOCODB_TABLE_NAME=youtubeTranscripts
 ```
 
 If you do not have NocoDB running locally you can start one with Docker:
@@ -222,11 +226,11 @@ The project features a dedicated page for viewing detailed information about a s
 - **Error Handling:** Gracefully handles cases where a video is not found using Next.js's `notFound()` mechanism.
 
 ### Schema Integration
-The page displays numerous fields from the `videoSchema` (defined in `src/lib/nocodb.ts`), including recently added fields like `KeyNumbersData`, `KeyExamples`, `BookMediaRecommendations`, `VideoGenre`, `Persons`, `Companies`, `InvestableAssets`, `TickerSymbol`, `Institutions`, `EventsFairs`, `DOIs`, `PrimarySources`, `Sentiment`, `SentimentReason`, and `TechnicalTerms`.
+The page displays numerous fields from the `videoSchema` (defined in `src/features/videos/api/nocodb.ts`), including recently added fields like `KeyNumbersData`, `KeyExamples`, `BookMediaRecommendations`, `VideoGenre`, `Persons`, `Companies`, `InvestableAssets`, `TickerSymbol`, `Institutions`, `EventsFairs`, `DOIs`, `PrimarySources`, `Sentiment`, `SentimentReason`, and `TechnicalTerms`.
 
 ### Technical Details
 - The page is implemented as a Next.js Server Component (`src/app/video/[videoId]/page.tsx`).
-- It directly fetches the required video data using `fetchVideoByVideoId` from `src/lib/nocodb.ts`.
+- It directly fetches the required video data using `fetchVideoByVideoId` from `src/features/videos/api/nocodb.ts`.
 - Styling is achieved using Tailwind CSS, consistent with the project's dark theme.
 
 ## Theming and Fonts
@@ -251,31 +255,32 @@ The project features a custom dark theme and specific typography to enhance user
 ## Troubleshooting
 
 *   **NocoDB Zod Parsing Errors:**
-    *   If you encounter Zod parsing errors related to NocoDB data types, ensure the schemas in `src/lib/nocodb.ts` match the actual data structure returned by your NocoDB API. For example, the `Sentiment` field was initially expected as a string but returned as a number, requiring a schema update from `z.string()` to `z.number()`.
+    *   If you encounter Zod parsing errors related to NocoDB data types, ensure the schemas in `src/features/videos/api/nocodb.ts` match the actual data structure returned by your NocoDB API. For example, the `Sentiment` field was initially expected as a string but returned as a number, requiring a schema update from `z.string()` to `z.number()`.
 
 ---
 
-## NocoDB API Usage (v2)
+## NocoDB API Usage
 
-This project uses the NocoDB v2 API. For reliability and performance, we use table and project IDs and authenticate via the `xc-token` header.
+The runtime talks to NocoDB via the v2 REST API (table id–based URLs). Single-row mutations follow the `_rowId` guidance outlined in the NocoDB docs and StackOverflow (“How do I PATCH a NocoDB row with v2 IDs?”). All requests authenticate via the `xc-token` header.
 
 - Required env vars (IDs, not names):
   - `NC_URL` – Base URL of NocoDB, e.g. `http://localhost:8080`
   - `NC_TOKEN` – API token with access to the project/table
   - `NOCODB_PROJECT_ID` – Project (base) ID, e.g. `phk8vxq6f1ev08h`
-  - `NOCODB_TABLE_ID` – Table ID, e.g. `m1lyoeqptp7fq5z`
-
-Important: NocoDB v2 APIs expect IDs. Using table names often works in some endpoints but is not guaranteed and can break filters or PATCH/DELETE.
+  - `NOCODB_TABLE_ID` – Opaque v2 table id, e.g. `m1lyoeqptp7fq5z`
+  - `NOCODB_TABLE_NAME` – Optional slug for diagnostics/logging
 
 ### Endpoints we use
 
-- List and query records (primary path used in this repo):
-  - `GET {NC_URL}/api/v2/tables/{tableId}/records`
-- Single record update/delete (primary path in `src/lib/nocodb.ts`):
-  - `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowId}`
-  - `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}`
-- Alternate, more explicit path (used in sibling variant under `vibed-yt-viewer/`):
-  - `GET|PATCH|DELETE {NC_URL}/api/v2/meta/projects/{projectId}/tables/{tableId}/records[/{rowId}]`
+- Metadata discovery: `GET {NC_URL}/api/v2/meta/projects/{projectId}/tables`
+- Table details: `GET {NC_URL}/api/v2/tables/{tableId}`
+- List and query records: `GET {NC_URL}/api/v2/tables/{tableId}/records`
+- Single-row mutations:
+  - `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowId}` (preferred)
+  - `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{numericId}` (numeric fallback)
+  - `PATCH {NC_URL}/api/v2/tables/{tableId}/records` (filter-based bulk fallback)
+  - `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}` / `{numericId}`
+  - `DELETE {NC_URL}/api/v2/tables/{tableId}/records` (filter-based bulk fallback)
 
 Headers:
 
@@ -301,12 +306,13 @@ See `fetchVideos({ tagSearchQuery: 'word1 word2' })` which builds the filter as 
 
 ### Client functions
 
-The NocoDB client lives in `src/lib/nocodb.ts` and exposes:
+The NocoDB client lives in `src/features/videos/api/nocodb.ts` and exposes:
 
 - `fetchVideos(options)` – list videos with pagination, sort, optional `fields`, and optional `tagSearchQuery`.
+- `fetchAllVideos(options)` – pull the complete dataset using paginated v2 requests and cache the result.
 - `fetchVideoByVideoId(videoId)` – load a single record by the `VideoID` column.
-- `updateVideo(recordIdOrVideoId, data)` – PATCH a record by numeric `Id` or by `VideoID` (auto-resolves numeric id).
-- `deleteVideo(recordIdOrVideoId)` – DELETE a record by numeric `Id` or `VideoID`.
+- `updateVideo(recordIdOrVideoId, data)` – mutate a record (v2 rowId → v2 numeric path → v2 bulk filter).
+- `deleteVideo(recordIdOrVideoId)` – delete a record (same sequence as `updateVideo`).
 
 All functions:
 - Read config with `getNocoDBConfig()` from env vars.
@@ -316,7 +322,7 @@ All functions:
 ### Example usage
 
 ```ts
-import { fetchVideos, fetchVideoByVideoId, updateVideo, deleteVideo } from '@/lib/nocodb';
+import { fetchVideos, fetchVideoByVideoId, updateVideo, deleteVideo } from '@/features/videos/api/nocodb';
 
 // 1) List videos with sorting and tag filter
 const { videos, pageInfo } = await fetchVideos({
@@ -344,7 +350,7 @@ We use Zod to strictly validate and normalize the data:
 - `videoSchema` – Full record for the detail page.
 - `videoListItemSchema` – Minimal record for the grid.
 
-Preprocessors in `src/lib/nocodb.ts` handle common NocoDB formats:
+Preprocessors in `src/features/videos/api/nocodb.ts` handle common NocoDB formats:
 
 - `stringToArrayOrNullPreprocessor` – converts newline-separated strings to `string[]` and handles empty objects.
 - `stringToLinkedRecordArrayPreprocessor` – converts comma-separated text or mixed inputs into arrays of linked-record-like objects (with `Title` / `name`).

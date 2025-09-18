@@ -34,8 +34,11 @@ Create a `.env.local` file in the project root with the following content:
 # NocoDB Configuration
 NC_URL=http://localhost:8080 # nocodb
 NC_TOKEN=your_nocodb_token_here
-NOCODB_TABLE_NAME=youtubeTranscripts
 NOCODB_PROJECT_ID=phk8vxq6f1ev08h
+# Required opaque table id for v2 endpoints
+NOCODB_TABLE_ID=m1lyoeqptp7fq5z
+# Optional diagnostic slug
+# NOCODB_TABLE_NAME=youtubeTranscripts
 ```
 #NC_URL=http://nocodb:8080
 
@@ -78,15 +81,7 @@ docker run -d \
    - `MemorableQuotes` (Long Text)
    - `MemorableTakeaways` (Long Text)
 
-## 6. Project ID Setup
-
-In `src/lib/nocodb.ts`, ensure the `projectId` is set correctly:
-
-```typescript
-const projectId = 'phk8vxq6f1ev08h'; // Update if your project ID is different
-```
-
-## 7. Run the Development Server
+## 6. Run the Development Server
 
 ```bash
 pnpm dev
@@ -94,7 +89,7 @@ pnpm dev
 
 The application will be available at `http://localhost:3030`
 
-## 8. Running Tests
+## 7. Running Tests
 
 ```bash
 # Run tests once
@@ -110,7 +105,7 @@ pnpm test:ui
 pnpm coverage
 ```
 
-## 9. Building for Production
+## 8. Building for Production
 
 ```bash
 # Build the application
@@ -120,7 +115,7 @@ pnpm build
 pnpm start
 ```
 
-## 10. Additional Configuration
+## 9. Additional Configuration
 
 - The project uses Tailwind CSS v4 with custom theming
 - shadcn/ui components are used for the UI
@@ -145,8 +140,9 @@ pnpm start
 ## Project Structure
 
 - `src/app/` - Next.js app router pages and layouts
-- `src/components/` - Reusable React components
-- `src/lib/` - Utility functions and API clients
+- `src/features/videos/components/` - Video-specific client components
+- `src/features/videos/api/` - NocoDB client, cache, and domain-specific helpers
+- `src/shared/` - Shared UI primitives, hooks, and utilities
 - `public/` - Static assets
 
 ## License

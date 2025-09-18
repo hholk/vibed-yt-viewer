@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { VideoListItem } from '@/lib/nocodb'; 
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
+import type { VideoListItem } from '@/features/videos/api/nocodb';
 
 interface VideoCardProps {
   video: VideoListItem; 
@@ -35,27 +35,18 @@ export function VideoCard({ video, priority = false }: VideoCardProps) {
             </div>
           )}
         </CardHeader>
-        {}
         <CardContent className="p-2 flex-grow flex flex-col justify-between -mt-px">
           <div>
-            {}
-            /* Ensure title prop is string | undefined (never null) */
             <CardTitle className="text-base font-semibold line-clamp-2 mb-0.5" title={video.Title ?? undefined}>
               {video.Title}
             </CardTitle>
             {video.Channel && (
-              
               <p className="text-xs text-muted-foreground truncate mb-0.5" title={video.Channel}>
                 {video.Channel}
               </p>
             )}
-            {} 
-            {} 
           </div>
-          {}
-          {}
         </CardContent>
-        {}
       </Card>
     </Link>
   );

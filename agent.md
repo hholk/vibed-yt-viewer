@@ -22,14 +22,13 @@ This document describes how the automation/agent (Cascade) and contributors work
   - `NC_TOKEN` (API token)
   - `NOCODB_PROJECT_ID` (e.g. `phk8vxq6f1ev08h`)
   - `NOCODB_TABLE_ID` (e.g. `m1lyoeqptp7fq5z`)
+- Optional but recommended:
+  - `NOCODB_TABLE_NAME` (e.g. `youtubeTranscripts`) so the v1 fallback has a deterministic slug.
 
-- Endpoints primarily used in this workspace (`src/lib/nocodb.ts`):
+- Endpoints primarily used in this workspace (`src/features/videos/api/nocodb.ts`):
   - List/query: `GET {NC_URL}/api/v2/tables/{tableId}/records`
-  - Update: `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowId}`
-  - Delete: `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}`
-
-- Alternate explicit path (used by the sibling implementation under `vibed-yt-viewer/`):
-  - `GET|PATCH|DELETE {NC_URL}/api/v2/meta/projects/{projectId}/tables/{tableId}/records[/{rowId}]`
+  - Update: `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowIdOrId}` with fallback to `PATCH {NC_URL}/api/v1/db/data/v1/{projectId}/{tableName}/{Id}` when the v2 route declines the request
+  - Delete: `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowIdOrId}` with fallback to `DELETE {NC_URL}/api/v1/db/data/v1/{projectId}/{tableName}/{Id}`
 
 - Headers:
   - `xc-token: <NC_TOKEN>`
@@ -52,7 +51,7 @@ This document describes how the automation/agent (Cascade) and contributors work
 
 - Error handling: Use `NocoDBRequestError` and `NocoDBValidationError`. When catching Axios errors, log `status`, `statusText`, and a compact `data` snapshot. Prefer actionable messages.
 
-- Caching: Use `getFromCache`, `setInCache`, and `deleteFromCache` in `src/lib/cache.ts` where appropriate (e.g., single-record fetches). Invalidate/update cache after successful PATCH/DELETE.
+- Caching: Use `getFromCache`, `setInCache`, and `deleteFromCache` in `src/features/videos/api/cache.ts` where appropriate (e.g., single-record fetches). Invalidate/update cache after successful PATCH/DELETE.
 
 ## Contribution Workflow
 
@@ -61,6 +60,7 @@ This document describes how the automation/agent (Cascade) and contributors work
   - `pnpm install`
   - `pnpm dev` (app at http://localhost:3030)
   - Ensure `.env.local` contains the required NocoDB variables (IDs).
+  - Use `pnpm ensure:video <videoId> [rating] [comment]` if you need to assert an update loop against the configured NocoDB instance.
 
 - Tests:
   - `pnpm test` for unit tests.
@@ -82,7 +82,7 @@ This document describes how the automation/agent (Cascade) and contributors work
 
 ## Quick Reference
 
-- Core client: `src/lib/nocodb.ts`
+- Core client: `src/features/videos/api/nocodb.ts`
 - Schemas: `videoSchema`, `videoListItemSchema`
 - Update field parsing if NocoDB returns different formats than expected.
 - Use `fields` param in list views to reduce payload.
