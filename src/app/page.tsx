@@ -1,4 +1,4 @@
-import { fetchAllVideos, type VideoListItem, videoListItemSchema } from "@/features/videos/api/nocodb";
+import { fetchVideos, type VideoListItem, videoListItemSchema, type PageInfo } from "@/features/videos/api/nocodb";
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Terminal } from 'lucide-react';
 import { VideoListClient } from '@/features/videos/components';
@@ -6,14 +6,17 @@ import { VideoListClient } from '@/features/videos/components';
 export default async function HomePage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ sort?: string; [key: string]: string | string[] | undefined }> }) {
   let videos: VideoListItem[] = [];
   let error: string | null = null;
+  let pageInfo: PageInfo | null = null;
 
   try {
     const resolvedSearchParams = await searchParamsPromise;
     const sortParam = resolvedSearchParams.sort;
-    const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt'; 
-    
-    const fetchedVideosData = await fetchAllVideos({
+    const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt';
+
+    // Only fetch the first page (25 items) for faster initial load
+    const fetchedVideosData = await fetchVideos({
       sort: currentSort,
+      limit: 25, // Reduced from 50 to 25 for faster initial load
       fields: [
         'Id',
         'rowId',
@@ -42,8 +45,18 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
       ],
       schema: videoListItemSchema,
     });
-    videos = fetchedVideosData;
-    
+
+    videos = fetchedVideosData.videos;
+    pageInfo = fetchedVideosData.pageInfo;
+
+    // Debug logging
+    console.log('Server-side debug:', {
+      videosCount: videos.length,
+      pageInfo: pageInfo,
+      hasNextPage: pageInfo?.hasNextPage,
+      totalRows: pageInfo?.totalRows
+    });
+
   } catch (e: unknown) {
     console.error('Failed to fetch videos:', e);
     error = e instanceof Error ? e.message : 'An unknown error occurred while fetching videos.';
@@ -78,7 +91,11 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
   return (
     <div className="container mx-auto p-4">
       <h1 className="mb-6 text-3xl font-bold font-mono text-brand">Video Collection</h1>
-      <VideoListClient videos={videos} />
+      <VideoListClient
+        videos={videos}
+        pageInfo={pageInfo}
+        initialSort={typeof searchParamsPromise.then ? undefined : (await searchParamsPromise).sort || '-CreatedAt'}
+      />
     </div>
   );
 }

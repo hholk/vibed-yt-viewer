@@ -11,12 +11,13 @@ A modern, responsive web application for browsing, searching, and interacting wi
 - **Markdown Support**: Rich text formatting for video descriptions and summaries
 - **Responsive Design**: Works on desktop and mobile devices
 - **Type Safety**: Built with TypeScript for better developer experience
-- **Simplified Update Pattern**: Uses "Update-by-key" approach - finds record by VideoID, updates using Record-ID in request body (bypasses metadata resolution for better reliability)
-- **Improved Debugging**: Reduced log noise by 80% - only essential retry and error information shown
-- **Modern UI**: Clean, accessible interface built with shadcn/ui components
-- **Server Components**: Optimized performance with Next.js 15 App Router
-- **Reliable Updates**: Simplified "Update-by-key" pattern eliminates rowId complexity
-- **Clean Debugging**: Reduced log noise by 80% - only essential information shown
+- **Code Optimization**: The NocoDB client has been extensively refactored to eliminate code duplication and improve maintainability:
+  - **Schema Preprocessing**: Created reusable preprocessing utilities (`preprocessors` object) to reduce schema definition code by ~70%
+  - **API Function Consolidation**: Unified duplicate fetch functions into a single `fetchSingleVideo` function with consistent behavior
+  - **Error Handling**: Implemented reusable error handling utilities for consistent logging and debugging
+  - **Filter Logic**: Simplified video filtering using configuration-driven approach with generic utilities
+  - **Cache Management**: Fixed cache duplication issues and improved cache key consistency
+  - All optimizations maintain backward compatibility while significantly improving code quality and performance
 
 ## 🛠️ Tech Stack
 

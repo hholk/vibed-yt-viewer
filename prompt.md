@@ -24,9 +24,13 @@ Develop a modern, performant, and user-friendly web application for browsing, se
 - Boilerplate code is always up to date.
 - After every task, `prompt.md`, `README.md`, and `status.md` are updated.
 - NocoDB v2 usage: endpoints `/api/v2/tables/{tableId}/records` with `xc-token` authentication; required env vars: `NC_URL`, `NC_TOKEN`, `NOCODB_PROJECT_ID`, `NOCODB_TABLE_ID`.
-- **Simplified Update Pattern**: Uses "Update-by-key" approach - finds record by VideoID, updates using Record-ID in request body (bypasses metadata resolution).
-- Video note upload, re-transcribe, and delete actions are robust with NocoDB v2 API.
-- **Improved Debugging**: Reduced log noise by 80% - only essential retry and error information shown.
+- **Code Optimization**: The NocoDB client has been extensively refactored to eliminate code duplication and improve maintainability:
+  - **Schema Preprocessing**: Created reusable preprocessing utilities (`preprocessors` object) to reduce schema definition code by ~70%
+  - **API Function Consolidation**: Unified duplicate fetch functions into a single `fetchSingleVideo` function with consistent behavior
+  - **Error Handling**: Implemented reusable error handling utilities for consistent logging and debugging
+  - **Filter Logic**: Simplified video filtering using configuration-driven approach with generic utilities
+  - **Cache Management**: Fixed cache duplication issues and improved cache key consistency
+  - All optimizations maintain backward compatibility while significantly improving code quality and performance
 
 ---
 

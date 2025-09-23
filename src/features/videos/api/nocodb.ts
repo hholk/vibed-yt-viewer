@@ -14,13 +14,73 @@ import { NocoDBRequestError, NocoDBValidationError } from './errors';
 import { getFromCache, setInCache, deleteFromCache } from './cache';
 import { logDevEvent, logDevError } from '@/shared/utils';
 
-/** Helper to format axios errors consistently */
-function createRequestError(prefix: string, error: unknown) {
+/**
+ * Reusable error handling utilities
+ */
+
+/** Handle Axios errors consistently across the codebase */
+function handleAxiosError(error: unknown, context: string, endpoint?: string): never {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
+    const data = error.response?.data;
+
+    void logDevError(`${context}: API error`, {
+      status,
+      endpoint,
+      data: data ? JSON.stringify(data) : undefined,
+      message: error.message,
+    });
+
+    throw createRequestError(`${context}: ${error.message}`, status, data);
+  }
+
   const message = error instanceof Error ? error.message : String(error);
+  void logDevError(`${context}: unexpected error`, { endpoint, message });
+  throw createRequestError(`${context}: ${message}`, undefined, undefined);
+}
+
+/** Handle NocoDB validation errors consistently */
+function handleValidationError(error: NocoDBValidationError, context: string): never {
+  void logDevError(`${context}: validation failed`, {
+    issues: error.issues.map((issue) => `${(issue as { path: string[]; message: string }).path.join('.')}: ${(issue as { path: string[]; message: string }).message}`),
+  });
+  throw error;
+}
+
+/** Safe JSON parsing with error handling */
+function safeJsonParse(data: unknown, context: string): any {
+  try {
+    return typeof data === 'string' ? JSON.parse(data) : data;
+  } catch (error) {
+    void logDevError(`${context}: JSON parse failed`, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return data;
+  }
+}
+
+/** Handle cache operations with consistent error handling */
+function safeCacheOperation<T>(
+  operation: () => T,
+  context: string,
+  fallback?: T
+): T | undefined {
+  try {
+    return operation();
+  } catch (error) {
+    void logDevError(`${context}: cache operation failed`, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return fallback;
+  }
+}
+
+/** Helper to format axios errors consistently */
+function createRequestError(prefix: string, status?: number, data?: unknown) {
   return new NocoDBRequestError(
-    `${prefix}: ${message}`,
-    axios.isAxiosError(error) ? error.response?.status : undefined,
-    axios.isAxiosError(error) ? error.response?.data : undefined,
+    prefix,
+    status,
+    data,
   );
 }
 
@@ -83,56 +143,76 @@ export function getNocoDBConfig(overrides: Partial<NocoDBConfig> = {}): NocoDBCo
 
 
 /**
- * Transforms empty objects to null for cleaner data handling
- * @param val - The value to check
- * @returns The original value or null if it's an empty object
+ * Reusable preprocessing functions for Zod schemas
+ * These eliminate repetitive preprocessing logic across field definitions
  */
-const emptyObjectToNull = (val: unknown) => (typeof val === 'object' && val !== null && !Array.isArray(val) && Object.keys(val).length === 0 ? null : val);
+const preprocessors = {
+  /** Convert various formats to arrays of strings */
+  stringToArrayOrNull: (val: unknown): string[] | null => {
+    if (typeof val === 'string') {
+      if (val.trim() === '') return [];
+      return val.split('\n').map(s => s.trim()).filter(s => s !== '');
+    }
+    if (Array.isArray(val)) return val as string[];
+    if (typeof val === 'object' && val !== null && Object.keys(val).length === 0) return [];
+    return null;
+  },
 
-/**
- * Preprocessor that converts string values to arrays, handling various input formats
- * - Converts newline-separated strings to arrays of strings
- * - Returns empty array for empty strings or empty objects
- * - Returns null for invalid inputs
- * 
- * @param val - The value to process (string, array, or object)
- * @returns Array of strings or null if input is invalid
- */
-const stringToArrayOrNullPreprocessor = (val: unknown): string[] | null => {
-  if (typeof val === 'string') {
-    if (val.trim() === '') return []; 
-    return val.split('\n').map(s => s.trim()).filter(s => s !== '');
-  }
-  if (Array.isArray(val)) { 
-    return val as string[]; 
-  }
-  if (typeof val === 'object' && val !== null && Object.keys(val).length === 0) { 
-    return [];
-  }
-  return null; 
+  /** Convert various formats to linked record arrays */
+  stringToLinkedRecordArray: (
+    val: unknown,
+  ): Array<{ Id?: number | string; Title?: string | null; name?: string | null }> | null => {
+    if (typeof val === 'string') {
+      if (val.trim() === '') return [];
+      return val.split(',').map(s => s.trim()).filter(s => s !== '').map(itemTitle => ({ Title: itemTitle, name: itemTitle }));
+    }
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'object' && val !== null && Object.keys(val).length === 0) return [];
+    return null;
+  },
+
+  /** Handle empty objects by converting to null */
+  emptyObjectToNull: (val: unknown) => (typeof val === 'object' && val !== null && !Array.isArray(val) && Object.keys(val).length === 0 ? null : val),
+
+  /** Parse sentiment values to numbers */
+  parseSentiment: (val: unknown) => {
+    if (val === null || val === undefined) return null;
+    const num = Number(val);
+    return isNaN(num) ? null : num;
+  },
+
+  /** Extract URL from array or string */
+  extractUrlFromArray: (val: unknown) => {
+    if (Array.isArray(val) && val.length > 0 && val[0] && typeof val[0] === 'object' && val[0].url) {
+      try {
+        const parsedUrl = new URL(val[0].url);
+        if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+          return val[0].url;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    }
+    if (typeof val === 'string') return val;
+    return null;
+  },
 };
 
 /**
- * Preprocessor for linked record fields in NocoDB
- * Converts various input formats to an array of linked record items
- * 
- * @param val - Input value (string, array, or object)
- * @returns Array of linked record items or null if input is invalid
+ * Create a schema field with common options
  */
-const stringToLinkedRecordArrayPreprocessor = (
-  val: unknown,
-): Array<{ Id?: number | string; Title?: string | null; name?: string | null }> | null => {
-  if (typeof val === 'string') {
-    if (val.trim() === '') return [];
-    return val.split(',').map(s => s.trim()).filter(s => s !== '').map(itemTitle => ({ Title: itemTitle, name: itemTitle }));
+const createField = (type: z.ZodType, options?: { preprocess?: (val: unknown) => unknown; defaultValue?: any }) => {
+  let field = type;
+  if (options?.preprocess) {
+    field = z.preprocess(options.preprocess, field);
   }
-  if (Array.isArray(val)) { 
-    return val;
+  if (options?.defaultValue !== undefined) {
+    field = field.optional().nullable().default(options.defaultValue);
+  } else {
+    field = field.optional().nullable();
   }
-  if (typeof val === 'object' && val !== null && Object.keys(val).length === 0) { 
-    return [];
-  }
-  return null;
+  return field;
 };
 
 /**
@@ -141,9 +221,9 @@ const stringToLinkedRecordArrayPreprocessor = (
  */
 const linkedRecordItemSchema = z.object({
   Id: z.union([z.number().int(), z.string()]).optional(),
-  Title: z.string().optional().nullable(), 
-  name: z.string().optional().nullable(),  
-  
+  Title: z.string().optional().nullable(),
+  name: z.string().optional().nullable(),
+
 }).passthrough();
 
 /**
@@ -158,27 +238,7 @@ export const videoSchema = z.object({
   _rowId: z.string().optional().nullable(),
   VideoID: z.string().nullable(),
   URL: z.string().url().optional().nullable(),
-  ThumbHigh: z.preprocess(
-    (val) => {
-      
-      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object' && val[0] !== null && typeof val[0].url === 'string') {
-        try {
-          
-          const parsedUrl = new URL(val[0].url);
-          if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
-            return val[0].url; 
-          }
-          return null; 
-        } catch {
-          
-          return null; 
-        }
-      }
-      
-      return null;
-    },
-    z.string().url().nullable() 
-  ),
+  ThumbHigh: z.preprocess(preprocessors.extractUrlFromArray, z.string().url().nullable()),
   Title: z.string().nullable(),
   Channel: z.string().optional().nullable().default(null),
   Description: z.string().optional().nullable().default(null),
@@ -187,8 +247,8 @@ export const videoSchema = z.object({
   CreatedAt: z.coerce.date().optional().nullable().default(null),
   UpdatedAt: z.coerce.date().optional().nullable().default(null),
   PublishedAt: z.coerce.date().optional().nullable().default(null),
-  Tags: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
-  Categories: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Tags: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Categories: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   CompletionDate: z.coerce.date().optional().nullable().default(null),
   FullTranscript: z.string().optional().nullable().default(null),
   ActionableAdvice: z.string().optional().nullable().default(null),
@@ -198,66 +258,59 @@ export const videoSchema = z.object({
   TLDR: z.string().optional().nullable().default(null),
   Task: z.string().optional().nullable().default(null),
   MainSummary: z.string().optional().nullable().default(null),
-  Mood: z.preprocess(emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
+  Mood: z.preprocess(preprocessors.emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
   DetailedNarrativeFlow: z.string().optional().nullable().default(null),
   DueDate: z.coerce.date().optional().nullable().default(null),
   Duration: z.number().optional().nullable().default(null),
-  MemorableQuotes: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
-  MemorableTakeaways: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
+  MemorableQuotes: z.preprocess(preprocessors.stringToArrayOrNull, z.array(z.string()).nullable().default([]).optional()),
+  MemorableTakeaways: z.preprocess(preprocessors.stringToArrayOrNull, z.array(z.string()).nullable().default([]).optional()),
   
   Notes: z.string().optional().nullable().default(null),
   Watched: z.boolean().optional().nullable().default(null),
   OriginalTitle: z.string().optional().nullable().default(null),
   OriginalChannel: z.string().optional().nullable().default(null),
   
-  Indicators: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
-  Trends: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
-  Locations: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
-  Events: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Indicators: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Trends: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Locations: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Events: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   FileFormat: z.string().optional().nullable().default(null),
   FileSize: z.string().optional().nullable().default(null),
   FrameRate: z.number().optional().nullable().default(null),
-  Hashtags: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
+  Hashtags: z.preprocess(preprocessors.stringToArrayOrNull, z.array(z.string()).nullable().default([]).optional()),
   Language: z.string().optional().nullable().default(null),
   MainTopic: z.string().optional().nullable().default(null),
   Priority: z.string().optional().nullable().default(null),
   Private: z.boolean().optional().nullable().default(null),
-  Products: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Products: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   Project: z.string().optional().nullable().default(null),
   Resolution: z.string().optional().nullable().default(null),
   Source: z.string().optional().nullable().default(null),
-  TopicsDiscussed: z.preprocess(emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
+  TopicsDiscussed: z.preprocess(preprocessors.emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
   Speaker: z.string().optional().nullable().default(null),
   Status: z.string().optional().nullable().default(null),
-  Subtitles: z.union([z.boolean(), z.preprocess(emptyObjectToNull, z.array(z.string()))]).optional().nullable().default(null),
-  Speakers: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Subtitles: z.union([z.boolean(), z.preprocess(preprocessors.emptyObjectToNull, z.array(z.string()))]).optional().nullable().default(null),
+  Speakers: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
   Transcript: z.string().optional().nullable().default(null), 
 
   
   KeyNumbersData: z.unknown().optional().nullable().default(null), 
-  KeyExamples: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
-  BookMediaRecommendations: z.preprocess(emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
-  RelatedURLs: z.preprocess(emptyObjectToNull, z.array(z.string().url()).nullable().default([]).optional()),
+  KeyExamples: z.preprocess(preprocessors.stringToArrayOrNull, z.array(z.string()).nullable().default([]).optional()),
+  BookMediaRecommendations: z.preprocess(preprocessors.emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
+  RelatedURLs: z.preprocess(preprocessors.emptyObjectToNull, z.array(z.string().url()).nullable().default([]).optional()),
   VideoGenre: z.string().optional().nullable().default(null),
-  Persons: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
-  Companies: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
-  InvestableAssets: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
-  TickerSymbol: z.string().optional().nullable().default(null), 
-  Institutions: z.preprocess(stringToLinkedRecordArrayPreprocessor, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
-  EventsFairs: z.preprocess(emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
-  DOIs: z.preprocess(emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
-  PrimarySources: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
+  Persons: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Companies: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  InvestableAssets: z.preprocess(preprocessors.stringToArrayOrNull, z.array(z.string()).nullable().default([]).optional()),
+  TickerSymbol: z.string().optional().nullable().default(null),
+  Institutions: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  EventsFairs: z.preprocess(preprocessors.emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
+  DOIs: z.preprocess(preprocessors.emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
+  PrimarySources: z.preprocess(preprocessors.stringToArrayOrNull, z.array(z.string()).nullable().default([]).optional()),
   
-  Sentiment: z.preprocess(
-    (val) => {
-      if (val === null || val === undefined) return null;
-      const num = Number(val);
-      return isNaN(num) ? null : num;
-    },
-    z.number().nullable().default(null)
-  ).optional(),
+  Sentiment: z.preprocess(preprocessors.parseSentiment, z.number().nullable().default(null)).optional(),
   SentimentReason: z.string().optional().nullable().default(null),
-  TechnicalTerms: z.preprocess(stringToArrayOrNullPreprocessor, z.array(z.string()).nullable().default([]).optional()),
+  TechnicalTerms: z.preprocess(preprocessors.stringToArrayOrNull, z.array(z.string()).nullable().default([]).optional()),
 
   Prompt: z.string().optional().nullable().default(null), 
   
@@ -333,7 +386,12 @@ async function resolveRecordIdentifiers(
       message: 'resolveRecordIdentifiers: trying numeric lookup',
       payload: { identifier: idOrVideoId, numeric: asNumber },
     });
-    video = (await fetchVideoByRecordId(asNumber, projectId, tableId, tableName)) as VideoRecordWithRowMeta | null;
+    video = (await fetchSingleVideo(asNumber, 'id', {
+      useCache: true,
+      ncProjectId: projectId,
+      ncTableId: tableId,
+      ncTableName: tableName,
+    })) as VideoRecordWithRowMeta | null;
   }
 
   if (!video) {
@@ -341,7 +399,12 @@ async function resolveRecordIdentifiers(
       message: 'resolveRecordIdentifiers: fallback to VideoID',
       payload: { identifier: idOrVideoId },
     });
-    video = (await fetchVideoByVideoId(String(idOrVideoId), projectId, tableId, tableName)) as VideoRecordWithRowMeta | null;
+    video = (await fetchSingleVideo(String(idOrVideoId), 'videoId', {
+      useCache: true,
+      ncProjectId: projectId,
+      ncTableId: tableId,
+      ncTableName: tableName,
+    })) as VideoRecordWithRowMeta | null;
   }
 
   if (!video) {
@@ -412,68 +475,18 @@ export const videoListItemSchema = z.object({
   Channel: z.string().optional().nullable(),
   Description: z.string().optional().nullable(),
   VideoGenre: z.string().optional().nullable(),
-  Persons: z
-    .preprocess(
-      stringToLinkedRecordArrayPreprocessor,
-      z.array(linkedRecordItemSchema).nullable().default([]).optional(),
-    ),
-  Companies: z
-    .preprocess(
-      stringToLinkedRecordArrayPreprocessor,
-      z.array(linkedRecordItemSchema).nullable().default([]).optional(),
-    ),
-  Indicators: z
-    .preprocess(
-      stringToLinkedRecordArrayPreprocessor,
-      z.array(linkedRecordItemSchema).nullable().default([]).optional(),
-    ),
-  Trends: z
-    .preprocess(
-      stringToLinkedRecordArrayPreprocessor,
-      z.array(linkedRecordItemSchema).nullable().default([]).optional(),
-    ),
-  InvestableAssets: z.preprocess(
-    stringToArrayOrNullPreprocessor,
-    z.array(z.string()).nullable().default([]).optional(),
-  ),
-  TickerSymbol: z.string().optional().nullable(),
-  Institutions: z
-    .preprocess(
-      stringToLinkedRecordArrayPreprocessor,
-      z.array(linkedRecordItemSchema).nullable().default([]).optional(),
-    ),
-  EventsFairs: z.preprocess(
-    emptyObjectToNull,
-    z.array(z.string()).nullable().default([]).optional(),
-  ),
-  DOIs: z.preprocess(
-    emptyObjectToNull,
-    z.array(z.string()).nullable().default([]).optional(),
-  ),
-  Hashtags: z.preprocess(
-    stringToArrayOrNullPreprocessor,
-    z.array(z.string()).nullable().default([]).optional(),
-  ),
-  MainTopic: z.string().optional().nullable(),
-  PrimarySources: z.preprocess(
-    stringToArrayOrNullPreprocessor,
-    z.array(z.string()).nullable().default([]).optional(),
-  ),
-  Sentiment: z
-    .preprocess(
-      (val) => {
-        if (val === null || val === undefined) return null;
-        const num = Number(val);
-        return isNaN(num) ? null : num;
-      },
-      z.number().nullable().default(null),
-    )
-    .optional(),
-  SentimentReason: z.string().optional().nullable(),
-  TechnicalTerms: z.preprocess(
-    stringToArrayOrNullPreprocessor,
-    z.array(z.string()).nullable().default([]).optional(),
-  ),
+  Persons: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Companies: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Indicators: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  Trends: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  InvestableAssets: z.preprocess(preprocessors.stringToArrayOrNull, z.array(z.string()).nullable().default([]).optional()),
+  Institutions: z.preprocess(preprocessors.stringToLinkedRecordArray, z.array(linkedRecordItemSchema).nullable().default([]).optional()),
+  EventsFairs: z.preprocess(preprocessors.emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
+  DOIs: z.preprocess(preprocessors.emptyObjectToNull, z.array(z.string()).nullable().default([]).optional()),
+  Hashtags: z.preprocess(preprocessors.stringToArrayOrNull, z.array(z.string()).nullable().default([]).optional()),
+  PrimarySources: z.preprocess(preprocessors.stringToArrayOrNull, z.array(z.string()).nullable().default([]).optional()),
+  Sentiment: z.preprocess(preprocessors.parseSentiment, z.number().nullable().default(null)).optional(),
+  TechnicalTerms: z.preprocess(preprocessors.stringToArrayOrNull, z.array(z.string()).nullable().default([]).optional()),
   Speaker: z.string().optional().nullable(),
   VideoID: z.string().nullable(),
 }).describe('videoListItemSchema_grid');
@@ -864,15 +877,6 @@ function purgeVideoFromCache(
   if (numericKey) {
     keys.add(numericKey);
   }
-  if (numericKey) {
-    keys.add(numericKey);
-  }
-  if (numericKey) {
-    keys.add(numericKey);
-  }
-  if (numericKey) {
-    keys.add(numericKey);
-  }
 
   const rowIdKey =
     video.rowId ??
@@ -1078,11 +1082,13 @@ export async function updateVideoSimple(
     });
 
     // Refresh the data to confirm it was saved
-    const refreshed = await fetchVideoByRecordIdDirect(
+    const refreshed = await fetchSingleVideo(
       recordId,
-      config.projectId,
-      tableIdForApi,
-      config.token,
+      'id',
+      {
+        useCache: false,
+        directConfig: { projectId: config.projectId, tableId: tableIdForApi, token: config.token },
+      }
     );
 
     if (!refreshed) {
@@ -1105,7 +1111,7 @@ export async function updateVideoSimple(
       error: error instanceof Error ? error.message : String(error),
     });
 
-    throw createRequestError('Failed to update video record', error ?? new Error('Unknown error'));
+    throw createRequestError('Failed to update video record', undefined, error ?? new Error('Unknown error'));
   }
 }
 
@@ -1278,7 +1284,7 @@ export async function deleteVideo(
     lastError: lastError instanceof Error ? lastError.message : String(lastError ?? 'unknown'),
   });
 
-  throw createRequestError('Failed to delete video record', lastError ?? new Error('Unknown error'));
+  throw createRequestError('Failed to delete video record', undefined, lastError ?? new Error('Unknown error'));
 }
 
 interface FetchVideosOptions<T extends z.ZodTypeAny> {
@@ -1313,6 +1319,23 @@ interface FetchVideosOptions<T extends z.ZodTypeAny> {
 export async function fetchVideos<T extends z.ZodTypeAny>(
   options?: FetchVideosOptions<T>
 ): Promise<{ videos: z.infer<T>[]; pageInfo: PageInfo }> {
+  // Create a cache key that includes all relevant parameters
+  const cacheKey = JSON.stringify({
+    sort: options?.sort,
+    limit: options?.limit || DEFAULT_PAGE_SIZE,
+    page: options?.page || 1,
+    fields: options?.fields,
+    tagSearchQuery: options?.tagSearchQuery,
+    project: options?.ncProjectId,
+    table: options?.ncTableId,
+  });
+
+  // Check cache first
+  const cached = getFromCache<{ videos: z.infer<T>[]; pageInfo: PageInfo }>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   // Only extract used variables to avoid lint errors
   const config = getNocoDBConfig({
     projectId: options?.ncProjectId,
@@ -1411,7 +1434,12 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
         );
       }
 
-      return { videos: parsedResponse.data.list as z.infer<T>[], pageInfo: parsedResponse.data.pageInfo };
+      const result = { videos: parsedResponse.data.list as z.infer<T>[], pageInfo: parsedResponse.data.pageInfo };
+
+      // Cache the result
+      setInCache(cacheKey, result);
+
+      return result;
     } catch (error) {
       lastError = error;
 
@@ -1446,7 +1474,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
         }
 
         console.warn(`Received 404 from NocoDB when fetching page ${page}. Returning empty result set.`);
-        return {
+        const emptyResult = {
           videos: [],
           pageInfo: {
             totalRows: 0,
@@ -1458,6 +1486,11 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
             hasPreviousPage: page > 1,
           },
         };
+
+        // Cache empty result too
+        setInCache(cacheKey, emptyResult);
+
+        return emptyResult;
       }
 
       if (error instanceof NocoDBValidationError) {
@@ -1470,6 +1503,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
 
   throw createRequestError(
     `Failed to fetch videos from NocoDB (page ${page}, limit ${limit}).`,
+    undefined,
     lastError ?? new Error('Unknown error'),
   );
 }
@@ -1614,82 +1648,146 @@ async function fetchSingleVideoRecord({
   }
 }
 
+/**
+ * Generic function to fetch a single video record with caching and error handling
+ * Consolidates fetchVideoByRecordId, fetchVideoByVideoId, and fetchVideoByRecordIdDirect
+ */
+async function fetchSingleVideo(
+  identifier: number | string,
+  identifierType: 'id' | 'videoId',
+  options?: {
+    useCache?: boolean;
+    ncProjectId?: string;
+    ncTableId?: string;
+    ncTableName?: string;
+    directConfig?: { projectId: string; tableId: string; token: string };
+  }
+): Promise<Video | null> {
+  const {
+    useCache = true,
+    ncProjectId,
+    ncTableId,
+    ncTableName,
+    directConfig
+  } = options || {};
+
+  // If direct config is provided, use simplified approach
+  if (directConfig) {
+    const config = getNocoDBConfig(directConfig);
+    const endpointUrl = `${config.url}/api/v2/tables/${encodeURIComponent(config.tableId)}/records`;
+    const whereClause = identifierType === 'id'
+      ? `(Id,eq,${identifier})`
+      : `(VideoID,eq,${identifier})`;
+
+    try {
+      const response = await apiClient.get(endpointUrl, {
+        headers: { 'xc-token': config.token },
+        params: {
+          where: whereClause,
+          limit: 1,
+          includeSystemFields: 'true',
+        },
+      });
+
+      let list: unknown[] = [];
+      if (response.data && typeof response.data === 'object') {
+        if (Array.isArray((response.data as { list?: unknown[] }).list)) {
+          list = (response.data as { list: unknown[] }).list;
+        } else if (Array.isArray((response.data as { data?: unknown[] }).data)) {
+          list = (response.data as { data: unknown[] }).data;
+        }
+      }
+
+      if (!Array.isArray(list) || list.length === 0) {
+        return null;
+      }
+
+      const videoData = list[0];
+      const parsedVideo = videoSchema.safeParse(videoData);
+
+      if (!parsedVideo.success) {
+        console.error('Failed to parse NocoDB response:', parsedVideo.error.issues);
+        return null;
+      }
+
+      return parsedVideo.data as Video;
+    } catch (error) {
+      console.error('fetchSingleVideo failed:', error);
+      return null;
+    }
+  }
+
+  // Use the cached approach with identifier resolution
+  if (identifierType === 'id') {
+    const cacheKeys = useCache ? [String(identifier)] : [];
+    return fetchSingleVideoRecord({
+      where: `(Id,eq,${identifier})`,
+      cacheKeys,
+      logLabel: `fetchSingleVideo - ${identifier}`,
+      projectId: ncProjectId,
+      tableId: ncTableId,
+      tableName: ncTableName,
+    });
+  } else {
+    const cacheKeys = useCache ? [String(identifier)] : [];
+    return fetchSingleVideoRecord({
+      where: `(VideoID,eq,${identifier})`,
+      cacheKeys,
+      logLabel: `fetchSingleVideo - ${identifier}`,
+      projectId: ncProjectId,
+      tableId: ncTableId,
+      tableName: ncTableName,
+    });
+  }
+}
+
+/**
+ * @deprecated Use fetchSingleVideo instead
+ */
 async function fetchVideoByRecordId(
   recordId: number,
   ncProjectIdParam?: string,
   ncTableIdParam?: string,
   ncTableNameParam?: string,
 ): Promise<Video | null> {
-  return fetchSingleVideoRecord({
-    where: `(Id,eq,${recordId})`,
-    cacheKeys: [recordId.toString()],
-    logLabel: `fetchVideoByRecordId - ${recordId}`,
-    projectId: ncProjectIdParam,
-    tableId: ncTableIdParam,
-    tableName: ncTableNameParam,
+  return fetchSingleVideo(recordId, 'id', {
+    useCache: true,
+    ncProjectId: ncProjectIdParam,
+    ncTableId: ncTableIdParam,
+    ncTableName: ncTableNameParam,
   });
 }
 
+/**
+ * @deprecated Use fetchSingleVideo with directConfig instead
+ */
 async function fetchVideoByRecordIdDirect(
   recordId: number,
   projectId: string,
   tableId: string,
   token: string,
 ): Promise<Video | null> {
-  const config = getNocoDBConfig({ projectId: projectId, tableId: tableId, token: token });
-  const endpointUrl = `${config.url}/api/v2/tables/${encodeURIComponent(tableId)}/records`;
-
-  try {
-    const response = await apiClient.get(endpointUrl, {
-      headers: { 'xc-token': config.token },
-      params: {
-        where: `(Id,eq,${recordId})`,
-        limit: 1,
-        includeSystemFields: 'true',
-      },
-    });
-
-    let list: unknown[] = [];
-    if (response.data && typeof response.data === 'object') {
-      if (Array.isArray((response.data as { list?: unknown[] }).list)) {
-        list = (response.data as { list: unknown[] }).list;
-      } else if (Array.isArray((response.data as { data?: unknown[] }).data)) {
-        list = (response.data as { data: unknown[] }).data;
-      }
-    }
-
-    if (!Array.isArray(list) || list.length === 0) {
-      return null;
-    }
-
-    const videoData = list[0];
-    const parsedVideo = videoSchema.safeParse(videoData);
-
-    if (!parsedVideo.success) {
-      console.error('Failed to parse NocoDB response:', parsedVideo.error.issues);
-      return null;
-    }
-
-    return parsedVideo.data as Video;
-  } catch (error) {
-    console.error('fetchVideoByRecordIdDirect failed:', error);
-    return null;
-  }
+  return fetchSingleVideo(recordId, 'id', {
+    useCache: false,
+    directConfig: { projectId, tableId, token },
+  });
 }
 
+/**
+ * Fetch video by VideoID with caching
+ * @deprecated Use fetchSingleVideo instead
+ */
 export async function fetchVideoByVideoId(
   videoId: string,
   ncProjectIdParam?: string,
   ncTableIdParam?: string,
   ncTableNameParam?: string,
 ): Promise<Video | null> {
-  return fetchSingleVideoRecord({
-    where: `(VideoID,eq,${videoId})`,
-    cacheKeys: [videoId],
-    logLabel: `fetchVideoByVideoId - ${videoId}`,
-    projectId: ncProjectIdParam,
-    tableId: ncTableIdParam,
-    tableName: ncTableNameParam,
+  return fetchSingleVideo(videoId, 'videoId', {
+    useCache: true,
+    ncProjectId: ncProjectIdParam,
+    ncTableId: ncTableIdParam,
+    ncTableName: ncTableNameParam,
   });
 }
 

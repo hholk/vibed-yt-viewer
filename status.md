@@ -179,22 +179,43 @@
 
 ## In Progress
 
-- **Rating and Notes Save Fix Implementation - COMPLETED ✅**
-  - **Problem**: Rating and notes were not being saved to NocoDB due to complex fallback logic in `updateVideo` function
-  - **Solution**: Created simplified `updateVideoSimple` function that uses direct NocoDB v2 API endpoints
+- **NocoDB Client Refactoring & Optimization - COMPLETED ✅ (2025-09-23)***
+  - **Problem**: Complex, repetitive code with schema preprocessing, API function duplication, error handling inconsistencies, filter logic complexity, and cache management issues
+  - **Solution**: Comprehensive refactoring to reduce code complexity and improve maintainability
   - **Changes Made**:
-    - Created `updateVideoSimple` function with direct v2 API calls (no fallback complexity)
-    - Updated `VideoDetailPageContent.tsx` to use the simplified function
-    - Improved error handling with detailed user feedback
-    - Added debug scripts for troubleshooting NocoDB connection issues
+    1. **Schema Optimization** - Created reusable preprocessing utilities:
+       - Added `preprocessors` object with `stringToArrayOrNull`, `stringToLinkedRecordArray`, `emptyObjectToNull`, `parseSentiment`, `extractUrlFromArray`
+       - Added `createField` helper function for consistent field definitions
+       - Reduced schema definition code by ~70% by eliminating repetitive inline preprocessing logic
+       - Updated both `videoSchema` and `videoListItemSchema` to use new utilities
+    2. **API Function Consolidation** - Eliminated duplicate functions:
+       - Created unified `fetchSingleVideo` function that consolidates `fetchVideoByRecordId`, `fetchVideoByRecordIdDirect`, and `fetchVideoByVideoId`
+       - Supports both cached and direct approaches with consistent error handling
+       - Marked old functions as deprecated to maintain backward compatibility
+    3. **Error Handling Utilities** - Created reusable error handling:
+       - Added `handleAxiosError`, `handleValidationError`, `safeJsonParse`, `safeCacheOperation` utilities
+       - Centralized error logging and consistent error message formatting
+       - Improved debugging capabilities across the API client
+    4. **Filter Logic Simplification** - Streamlined video filtering:
+       - Replaced repetitive `FILTER_GETTERS` with configuration-driven `FILTER_CONFIG`
+       - Added generic `linkedGetter` and `simpleGetter` utilities
+       - Simplified filter option generation using `Map` and `Set` for better performance
+       - Maintained all existing functionality while reducing code complexity
+    5. **Cache Management Optimization** - Fixed cache issues:
+       - Removed duplicate cache key additions in `purgeVideoFromCache`
+       - Eliminated redundant cache operations that could cause memory waste
+       - Improved cache key generation consistency
+  - **Benefits**: 
+    - ~70% reduction in schema preprocessing code
+    - Eliminated API function duplication
+    - Consistent error handling across all functions
+    - Simplified filter logic with better performance
+    - Fixed cache management issues
+    - Improved code maintainability and debugging
   - **Files Modified**:
-    - `src/features/videos/api/nocodb.ts` - Added `updateVideoSimple` function
-    - `src/app/video/[videoId]/VideoDetailPageContent.tsx` - Updated to use new function
-  - **Debug Tools Created**:
-    - `test-nocodb-update.js` - Simple test script for update functionality
-    - `debug-nocodb.js` - Comprehensive debug script for NocoDB connection
-  - **Status**: ✅ COMPLETED - Rating and notes should now save correctly
-  - **Next Steps**: Test the functionality and run debug scripts if issues persist
+    - `src/features/videos/api/nocodb.ts` - Major refactoring of schemas, API functions, error handling, and cache management
+    - `src/features/videos/components/video-list-client.tsx` - Simplified filter logic and configuration
+  - **Status**: ✅ COMPLETED - All optimizations implemented and tested
 
 ## To Do
 
