@@ -8,7 +8,7 @@ A modern, responsive web application for browsing, searching, and interacting wi
 - **Detailed Video View**: View comprehensive video details including transcripts, summaries, and metadata
 - **Interactive Rating**: Rate videos using a 5-star rating system
 - **Personal Notes**: Add and edit personal comments for each video
-- **Markdown Support**: Rich text formatting for video descriptions and summaries
+- **Markdown Table Rendering**: Automatic detection and beautiful rendering of markdown tables in video descriptions and summaries with responsive design
 - **Responsive Design**: Works on desktop and mobile devices
 - **Type Safety**: Built with TypeScript for better developer experience
 - **Code Optimization**: The NocoDB client has been extensively refactored to eliminate code duplication and improve maintainability:
@@ -238,7 +238,55 @@ The page displays numerous fields from the `videoSchema` (defined in `src/featur
 - It directly fetches the required video data using `fetchVideoByVideoId` from `src/features/videos/api/nocodb.ts`.
 - Styling is achieved using Tailwind CSS, consistent with the project's dark theme.
 
-## Theming and Fonts
+## 📊 Markdown Table Rendering
+
+The application features a robust markdown table rendering system that automatically detects and beautifully renders markdown tables within video content.
+
+### How It Works
+
+1. **Table Detection**: The `SafeReactMarkdown` component automatically detects markdown tables by looking for:
+   - Lines containing `|` characters with proper table formatting
+   - Separator rows with dashes and colons for alignment
+
+2. **Content Splitting**: When a table is detected, the content is intelligently split into:
+   - Content before the table
+   - The table itself
+   - Content after the table
+
+3. **Dual Rendering**: Each section is rendered separately:
+   - Regular markdown content uses React Markdown with GFM support
+   - Tables are rendered using a custom `MarkdownTable` component
+
+### Components Involved
+
+- **`SafeReactMarkdown`** (`src/shared/components/safe-react-markdown.tsx`): Main component that handles table detection and content splitting
+- **`MarkdownTable`** (`src/shared/components/markdown-table.tsx`): Custom component for rendering tables with Tailwind CSS styling
+
+### Features
+
+- ✅ **Automatic Detection**: Tables are detected and rendered without user intervention
+- ✅ **Responsive Design**: Tables are horizontally scrollable on mobile devices
+- ✅ **Dark Theme**: Tables match the application's dark theme with proper contrast
+- ✅ **Mixed Content**: Supports tables mixed with other markdown content
+- ✅ **Error Handling**: Gracefully handles malformed tables
+
+### Example Usage
+
+Tables in video descriptions are automatically rendered:
+
+```markdown
+| Feature | Description | Impact |
+|---------|-------------|--------|
+| AI Agents | Autonomous software | High |
+| Quantum Computing | Revolutionary tech | Medium |
+| Blockchain | Distributed ledger | Low |
+```
+
+This renders as a beautiful, responsive HTML table with proper styling and hover effects.
+
+### Technical Implementation
+
+The table detection uses regex patterns to identify table structures and extract them for separate rendering. The implementation prioritizes reliability and performance while maintaining the existing markdown rendering capabilities.
 
 The project features a custom dark theme and specific typography to enhance user experience.
 

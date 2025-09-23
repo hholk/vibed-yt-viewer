@@ -62,27 +62,3 @@ export async function logDevError(message: string, payload?: Record<string, unkn
 export async function logDevInfo(message: string, payload?: Record<string, unknown>) {
   await logDevEvent({ message, payload: payload ?? null, level: 'info' });
 }
-
-// Server-only exports
-export async function serverLogDevEvent(payload: DevLogPayload) {
-  if (process.env.NODE_ENV === 'production') return;
-
-  const entry = formatEntry(payload);
-
-  if (typeof window === 'undefined') {
-    console.log('[dev-log]', entry);
-    await writeServerLog(entry);
-    return;
-  }
-
-  // On client side, just log to console
-  console.log('[dev-log]', entry);
-}
-
-export async function serverLogDevError(message: string, payload?: Record<string, unknown>) {
-  await serverLogDevEvent({ message, payload: payload ?? null, level: 'error' });
-}
-
-export async function serverLogDevInfo(message: string, payload?: Record<string, unknown>) {
-  await serverLogDevEvent({ message, payload: payload ?? null, level: 'info' });
-}

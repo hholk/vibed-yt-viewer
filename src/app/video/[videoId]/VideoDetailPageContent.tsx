@@ -6,86 +6,26 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy, Trash2, XCircle } from 'lucide-react';
 import type { Video, VideoListItem } from '@/features/videos/api/nocodb';
-import { updateVideoSimple, deleteVideo } from '@/features/videos/api/nocodb';
 import { StarRating } from '@/features/videos/components';
+import { SafeReactMarkdown } from '@/shared/components/safe-react-markdown';
 
 export type { Video, VideoListItem } from '@/features/videos/api/nocodb';
-
-type SafeReactMarkdownProps = {
-  children: string;
-};
-// Function to clean up markdown content
-const cleanMarkdownContent = (content: string): string => {
-  if (!content) return content;
-  
-  // Handle JSON array format (e.g., ["- quote1", "- quote2"])
-  try {
-    const parsed = JSON.parse(content);
-    if (Array.isArray(parsed)) {
-      // Clean each item in the array and join with double newlines
-      return parsed
-          .map(item => {
-            // Remove any leading/trailing quotes and whitespace
-            const cleanItem = String(item).trim()
-              .replace(/^["']|["']$/g, '')  // Remove surrounding quotes
-              .replace(/^\s*-\s*/, '')       // Remove leading bullet point
-              .trim();
-            return cleanItem;
-          })
-        .filter(Boolean) // Remove any empty strings
-        .join('\n\n');
-    }
-  } catch {
-    // Not a JSON string, continue with other cleaning
-  }
-  
-  // Clean up the content if it's not a JSON array
-  return content
-    .replace(/^\s*\[\s*/g, '')        // Remove opening [
-    .replace(/\s*\]\s*$/g, '')        // Remove closing ]
-    .replace(/"\s*,\s*"/g, '\n')     // Replace "," with newlines
-    .replace(/[\r\n]+/g, '\n')        // Normalize line endings
-    .split('\n')                      // Split into lines
-    .map(line => 
-      line
-        .replace(/^\s*["-]\s*/, '')  // Remove leading "- or -
-        .replace(/^\s*\d+\.?\s*/, '') // Remove leading numbers like "1. "
-        .replace(/"$/g, '')           // Remove trailing quotes
-        .trim()
-    )
-    .filter(Boolean)                  // Remove empty lines
-    .join('\n\n')                    // Join with double newlines
-    .replace(/\n{3,}/g, '\n\n')       // Normalize multiple newlines
-    .trim();
-};
-
-// Lazy load markdown component for better performance
-const LazyReactMarkdown = lazy(() => import('react-markdown'));
-
-const SafeReactMarkdown = ({ children }: SafeReactMarkdownProps) => {
-  const cleanedContent = cleanMarkdownContent(children);
-  return (
-    <Suspense fallback={<div className="text-neutral-400">Loading content...</div>}>
-      <LazyReactMarkdown>{cleanedContent}</LazyReactMarkdown>
-    </Suspense>
-  );
-};
 
 type FieldValue = string | number | boolean | Date | string[] | Record<string, unknown> | Record<string, unknown>[] | null | undefined;
 
 interface VideoDetailPageContentProps {
   video: Video;
-  allVideos: VideoListItem[]; 
+  allVideos: VideoListItem[];
   previousVideo?: { Id: string; Title: string | null } | null;
   nextVideo?: { Id: string; Title: string | null } | null;
 }
 
 const formatFieldName = (fieldName: string): string => {
   return fieldName
-    .replace(/([A-Z])/g, ' $1') 
-    .replace(/_/g, ' ')        
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
     .trim()
-    .replace(/^\w/, (c) => c.toUpperCase()); 
+    .replace(/^\w/, (c) => c.toUpperCase());
 };
 
 const MARKDOWN_FIELDS = [
@@ -113,7 +53,7 @@ interface DetailItemProps {
   onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
 }
 
-const DetailItem = React.memo<DetailItemProps>(({ 
+const DetailItem = React.memo<DetailItemProps>(({
   label,
   value,
   isLink = false,
@@ -125,21 +65,21 @@ const DetailItem = React.memo<DetailItemProps>(({
   onDragOver,
   onDrop
 }) => {
-  
+
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true; 
-    
+    if (typeof window === 'undefined') return true;
+
     // Always check localStorage first for user's last preference
     const savedState = localStorage.getItem(`collapsed_${label}`);
     if (savedState !== null) {
       return JSON.parse(savedState);
     }
-    
+
     // Fall back to the initial collapsed state if no saved preference exists
     return isInitiallyCollapsed ?? true;
   });
 
-  
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(`collapsed_${label}`, JSON.stringify(isCollapsed));
@@ -151,27 +91,27 @@ const DetailItem = React.memo<DetailItemProps>(({
     setIsCollapsed(prev => !prev);
   }, []);
 
-  const isEmpty = value === null || value === undefined || 
-                (Array.isArray(value) && value.length === 0) || 
+  const isEmpty = value === null || value === undefined ||
+                (Array.isArray(value) && value.length === 0) ||
                 (typeof value === 'string' && value.trim() === '');
 
   const renderValue = () => {
     if (isEmpty) {
       return <span className="text-sm text-neutral-500 italic">N/A</span>;
     }
-    
+
     // Handle array values first
     if (Array.isArray(value) || (typeof value === 'string' && value.trim().startsWith('['))) {
       let items: string[] = [];
-      
+
       // If it's already an array, use it directly
       if (Array.isArray(value)) {
-        items = value.map(item => 
-          typeof item === 'object' && item !== null && 'Title' in item 
+        items = value.map(item =>
+          typeof item === 'object' && item !== null && 'Title' in item
             ? String((item as { Title: string }).Title)
             : String(item)
         );
-      } 
+      }
       // If it's a string that looks like a JSON array, try to parse it
       else if (typeof value === 'string') {
         try {
@@ -186,15 +126,15 @@ const DetailItem = React.memo<DetailItemProps>(({
           items = [value];
         }
       }
-      
+
       // Clean up each item
-      items = items.map(item => 
+      items = items.map(item =>
         item
           .replace(/^\s*[\[\]"\-]\s*/, '')  // Remove leading [ " - characters
           .replace(/[\]"\-]\s*$/, '')       // Remove trailing ] " - characters
           .trim()
       );
-      
+
       // If we're in markdown mode, join with double newlines
       if (isMarkdown) {
         return (
@@ -205,7 +145,7 @@ const DetailItem = React.memo<DetailItemProps>(({
           </div>
         );
       }
-      
+
       // Otherwise render as a list
       return (
         <ul className="list-disc pl-5 space-y-1">
@@ -217,9 +157,9 @@ const DetailItem = React.memo<DetailItemProps>(({
         </ul>
       );
     }
-    
+
     // Handle markdown content
-    if (isMarkdown && typeof value === 'string') { 
+    if (isMarkdown && typeof value === 'string') {
       return (
         <div className="prose prose-invert prose-neutral prose-sm max-w-none markdown-box">
           <SafeReactMarkdown>
@@ -263,16 +203,16 @@ const DetailItem = React.memo<DetailItemProps>(({
     }
 
     if (typeof value === 'object' && value !== null) {
-      
+
       if (label === 'Transcript' && value) {
-        
-        const transcriptText = typeof value === 'string' ? value : 
-                             (value && typeof value === 'object' && 'toString' in value) ? 
-                             value.toString() : 
+
+        const transcriptText = typeof value === 'string' ? value :
+                             (value && typeof value === 'object' && 'toString' in value) ?
+                             value.toString() :
                              '';
-        
+
         if (!transcriptText) return null;
-            
+
         return (
           <div key="transcript" className="space-y-3 mt-2 max-h-96 overflow-y-auto p-4 border rounded bg-gray-50 dark:bg-gray-800">
             <h3 className="text-lg font-semibold mb-2">Transcript</h3>
@@ -281,9 +221,9 @@ const DetailItem = React.memo<DetailItemProps>(({
                 const [firstLine, ...rest] = block.split('\n');
                 const timeMatch = firstLine?.match(/\d{2}:\d{2}:\d{2},\d{3}/);
                 const text = rest.join(' ').trim();
-                
+
                 if (!text) return null;
-                
+
                 return (
                   <div key={index} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
                     {timeMatch && (
@@ -309,7 +249,7 @@ const DetailItem = React.memo<DetailItemProps>(({
     return <span className="text-sm break-words">{String(value)}</span>;
   };
 
-  
+
   if (isEmpty) {
     return null;
   }
@@ -369,7 +309,7 @@ DetailItem.displayName = 'DetailItem';
 
 export function VideoDetailPageContent({
   video,
-  
+
   previousVideo,
   nextVideo,
 }: VideoDetailPageContentProps) {
@@ -389,8 +329,17 @@ export function VideoDetailPageContent({
     setIsSaving(true);
     setSaveError(null);
     try {
-      await updateVideoSimple(currentVideo.Id, { DetailedNarrativeFlow: null });
-      setCurrentVideo(prev => ({ ...prev!, DetailedNarrativeFlow: null })); // No alert, UI will update
+      const response = await fetch(`/api/videos/${currentVideo.Id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId: currentVideo.Id, data: { DetailedNarrativeFlow: null } })
+      });
+      const result = await response.json();
+      if (result.success) {
+        setCurrentVideo(prev => ({ ...prev!, DetailedNarrativeFlow: null })); // No alert, UI will update
+      } else {
+        throw new Error(result.error || 'Failed to clear narrative');
+      }
     } catch (error) {
       console.error('Failed to clear narrative:', error);
       setSaveError(error instanceof Error ? error.message : 'Failed to clear narrative.');
@@ -408,9 +357,16 @@ export function VideoDetailPageContent({
     setIsDeleting(true);
     setSaveError(null);
     try {
-      await deleteVideo(currentVideo.Id);
-      // No alert, will redirect
-      router.push('/');
+      const response = await fetch(`/api/videos/${currentVideo.Id}?videoId=${currentVideo.Id}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json();
+      if (result.success) {
+        // No alert, will redirect
+        router.push('/');
+      } else {
+        throw new Error(result.error || 'Failed to delete video');
+      }
     } catch (error) {
       console.error('Failed to delete video:', error);
       setSaveError(error instanceof Error ? error.message : 'Failed to delete video.');
@@ -420,13 +376,11 @@ export function VideoDetailPageContent({
     }
   };
 
-  
+
   const [activeImportanceRating, setActiveImportanceRating] = useState<number | null>(video.ImportanceRating || null);
-  
-  
-  
-  
-  
+
+
+
 
   useEffect(() => {
     setCurrentVideo(video);
@@ -434,12 +388,12 @@ export function VideoDetailPageContent({
     setIsEditingComment(false);
     setSaveError(null);
     setActiveImportanceRating(video.ImportanceRating || null);
-    
-    
-    
+
+
+
   }, [video]);
 
-  
+
   useEffect(() => {
     const currentQuery = searchParams.toString();
     const queryString = currentQuery ? `?${currentQuery}` : '';
@@ -503,9 +457,18 @@ export function VideoDetailPageContent({
     setSaveError(null);
     try {
       const updatedFields = { PersonalComment: personalComment };
-      await updateVideoSimple(currentVideo.Id, updatedFields);
-      setCurrentVideo(prev => ({ ...prev!, ...updatedFields }));
-      setIsEditingComment(false);
+      const response = await fetch(`/api/videos/${currentVideo.Id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId: currentVideo.Id, data: updatedFields })
+      });
+      const result = await response.json();
+      if (result.success) {
+        setCurrentVideo(prev => ({ ...prev!, ...updatedFields }));
+        setIsEditingComment(false);
+      } else {
+        throw new Error(result.error || 'Failed to save note');
+      }
     } catch (error) {
       console.error('Failed to save comment:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
@@ -537,16 +500,25 @@ export function VideoDetailPageContent({
       setActiveImportanceRating(newRating);
     }
 
-    setIsSaving(true); 
+    setIsSaving(true);
     setSaveError(null);
     try {
       const updatedFields = { [field]: newRating };
       // Use the simplified update function for better reliability
-      const updatedVideo = await updateVideoSimple(currentVideo.Id, updatedFields);
-      setCurrentVideo(prev => ({ ...prev!, ...updatedFields as Partial<Video> }));
-      
-      // Also update the state with the refreshed data from NocoDB
-      setCurrentVideo(updatedVideo);
+      const response = await fetch(`/api/videos/${currentVideo.Id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId: currentVideo.Id, data: updatedFields })
+      });
+      const result = await response.json();
+      if (result.success) {
+        setCurrentVideo(prev => ({ ...prev!, ...updatedFields as Partial<Video> }));
+
+        // Also update the state with the refreshed data from NocoDB
+        setCurrentVideo(result.video);
+      } else {
+        throw new Error(result.error || `Failed to save ${String(field)}`);
+      }
     } catch (error) {
       console.error(`Failed to save ${field}:`, error);
       const errorMessage = error instanceof Error ? error.message : `Failed to save ${String(field)}`;
@@ -562,57 +534,20 @@ export function VideoDetailPageContent({
       }
 
       setSaveError(`${userMessage}. Check browser console for details.`);
-      
+
       if (field === 'ImportanceRating') {
         setActiveImportanceRating(currentVideo.ImportanceRating || null);
       }
-      
+
     } finally {
       setIsSaving(false);
     }
   };
 
-  
-  
-  
-  
-  
 
-  
-  
-  
-  
-  
-  
-  
-  
 
-  
-  
 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
 
-  
-  
-  
-
-  
   const DEFAULT_FIELD_ORDER: (keyof Video)[] = [
     'ThumbHigh',
     'URL',
@@ -701,7 +636,7 @@ export function VideoDetailPageContent({
     },
     []
   );
-  
+
   // Get channel info if it exists
   const channelInfo = currentVideo.Channel ? {
     label: 'Channel',
@@ -722,11 +657,11 @@ export function VideoDetailPageContent({
         value = null;
       }
 
-      if (value === null || value === undefined || 
+      if (value === null || value === undefined ||
          (typeof value === 'string' && value.trim() === '') ||
          (Array.isArray(value) && value.length === 0)
       ) {
-        return null; 
+        return null;
       }
 
       let isInitiallyCollapsed = true;
@@ -734,7 +669,7 @@ export function VideoDetailPageContent({
       if (initiallyExpandedFields.includes(String(fieldKey))) {
         isInitiallyCollapsed = false;
       }
-      
+
       const isImg = fieldKey === 'ThumbHigh';
       const isLnk = fieldKey === 'URL' || (fieldKey === 'RelatedURLs' && Array.isArray(value) && value.every(item => typeof item === 'string' && item.startsWith('http')));
       const isMd = MARKDOWN_FIELDS.includes(String(fieldKey)) || fieldKey === 'Description' || fieldKey === 'Transcript' || (typeof value === 'string' && String(value).length > 100 && !isLnk && !isImg);
@@ -743,7 +678,7 @@ export function VideoDetailPageContent({
         <DetailItem
           key={String(fieldKey)}
           label={label}
-          value={value as FieldValue} 
+          value={value as FieldValue}
           isInitiallyCollapsed={isInitiallyCollapsed}
           isMarkdown={isMd}
           isImage={isImg}
@@ -757,7 +692,7 @@ export function VideoDetailPageContent({
     }).filter(Boolean); // Filter out null values
   }, [fieldOrder, currentVideo, handleDragStart, handleDragOver, handleDrop]);
 
-  
+
   if (!currentVideo) {
     return (
       <div className="container mx-auto p-4 min-h-screen flex items-center justify-center">
@@ -766,7 +701,7 @@ export function VideoDetailPageContent({
     );
   }
 
-  
+
   return (
     <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
       <div className="container mx-auto max-w-5xl">
@@ -809,7 +744,7 @@ export function VideoDetailPageContent({
         <h1 className="text-3xl font-semibold mb-4 text-neutral-100 break-words hyphens-auto" title={currentVideo.Title || 'Video Title'}>
           {currentVideo.Title || 'Untitled Video'}
         </h1>
-        
+
         {}
         {saveError && (
           <div className="mb-4 p-3 bg-red-700/30 border border-red-600 text-red-300 rounded-md flex items-center">
@@ -822,7 +757,7 @@ export function VideoDetailPageContent({
           {/* Main content area with memoized field processing */}
           <div className="md:col-span-2 space-y-4">
             {processedFields}
-          </div>  
+          </div>
 
           {/* Right sidebar */}
           <div className="md:col-span-1 space-y-6">
@@ -841,7 +776,7 @@ export function VideoDetailPageContent({
                 </div>
               </div>
             )}
-            
+
             {/* Importance Rating */}
             <div className="p-4 bg-neutral-800 rounded-lg shadow">
               <h3 className="text-lg font-semibold mb-2 text-neutral-300">Importance Rating</h3>
@@ -948,7 +883,7 @@ export function VideoDetailPageContent({
                 </div>
               )}
             </div>
-            
+
             {}
             <div className="p-4 bg-neutral-800 rounded-lg shadow text-xs text-neutral-400 space-y-1">
                 {currentVideo.VideoID && <p>Video ID: <span className="font-mono">{currentVideo.VideoID}</span></p>}

@@ -1,6 +1,6 @@
 /**
  * NocoDB API Client for YouTube Viewer Application
- * 
+ *
  * This module provides functions to interact with the NocoDB API, including:
  * - Fetching video lists with sorting and pagination
  * - Fetching individual video details by ID
@@ -12,7 +12,7 @@ import axios from 'axios';
 import { z } from 'zod';
 import { NocoDBRequestError, NocoDBValidationError } from './errors';
 import { getFromCache, setInCache, deleteFromCache } from './cache';
-import { logDevEvent, logDevError } from '@/shared/utils';
+import { logDevEvent, logDevError } from '@/shared/utils/server-logger';
 
 /**
  * Reusable error handling utilities
@@ -907,22 +907,17 @@ function purgeVideoFromCache(
  *
  * Accepts either a numeric recordId or a VideoID string. If a string is provided, resolves it to the numeric Id.
  */
-export function normalizeImportanceRating(value: unknown): number | null | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (value === null) {
+export async function normalizeImportanceRating(value: unknown): Promise<number | null> {
+  if (value === undefined || value === null) {
     return null;
   }
 
   if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed === '') {
+    const parsed = parseFloat(value);
+    if (isNaN(parsed)) {
       return null;
     }
 
-    const parsed = Number(trimmed);
     if (!Number.isFinite(parsed)) {
       return null;
     }
@@ -957,7 +952,7 @@ export function normalizeImportanceRating(value: unknown): number | null | undef
   return null;
 }
 
-export function normalizePersonalComment(value: unknown): string | null | undefined {
+export async function normalizePersonalComment(value: unknown): Promise<string | null | undefined> {
   if (value === undefined) {
     return undefined;
   }
@@ -993,7 +988,7 @@ export async function updateVideoSimple(
 
   // Normalize data
   if ('ImportanceRating' in updateData) {
-    const normalized = normalizeImportanceRating(updateData.ImportanceRating);
+    const normalized = await normalizeImportanceRating(updateData.ImportanceRating);
     if (normalized === undefined) {
       delete updateData.ImportanceRating;
     } else {
@@ -1002,7 +997,7 @@ export async function updateVideoSimple(
   }
 
   if ('PersonalComment' in updateData) {
-    const normalizedComment = normalizePersonalComment(updateData.PersonalComment);
+    const normalizedComment = await normalizePersonalComment(updateData.PersonalComment);
     if (normalizedComment === undefined) {
       delete updateData.PersonalComment;
     } else {
