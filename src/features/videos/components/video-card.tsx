@@ -43,7 +43,7 @@ export function VideoCard({ video, priority = false }: VideoCardProps) {
             </div>
           )}
         </div>
-        <div className="p-2 flex-grow flex flex-col justify-between">
+        <div className="p-2 flex-grow flex flex-col justify-between bg-neutral-800/50 rounded-b-lg">
           <div>
             <h3
               className="text-base font-semibold line-clamp-2 mb-0.5"
