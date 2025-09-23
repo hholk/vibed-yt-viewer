@@ -576,7 +576,9 @@ async function loadProjectTablesMetadata(
               ? data
               : [];
 
-      const metadata = listCandidate.filter((item): item is NocoDBTableMetadata => typeof item === 'object' && item !== null);
+      const metadata = listCandidate.filter((item: unknown): item is NocoDBTableMetadata => {
+        return typeof item === 'object' && item !== null;
+      });
 
       if (metadata.length > 0) {
         projectTablesMetaCache.set(cacheKey, metadata);
@@ -788,6 +790,13 @@ function extractMissingFieldsFromMessage(message?: string): string[] {
   return Array.from(matches);
 }
 
+function safeTrim(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value.trim();
+  }
+  return null;
+}
+
 function cacheVideoRecord(
   video: VideoRecordWithRowMeta,
   extraKeys: Array<string | null | undefined> = [],
@@ -806,9 +815,7 @@ function cacheVideoRecord(
   const numericKey =
     typeof video.Id === 'number'
       ? video.Id.toString()
-      : typeof video.Id === 'string' && video.Id.trim().length > 0
-        ? video.Id
-        : null;
+      : safeTrim(video.Id);
   if (numericKey) {
     keys.add(numericKey);
   }
@@ -844,12 +851,25 @@ function purgeVideoFromCache(
     keys.add(video.VideoID);
   }
 
-  const numericKey =
-    typeof video.Id === 'number'
-      ? video.Id.toString()
-      : typeof video.Id === 'string' && video.Id.trim().length > 0
-        ? video.Id
-        : null;
+  const numericKey = (() => {
+    if (typeof video.Id === 'number') {
+      return video.Id.toString();
+    }
+    if (video.Id && typeof video.Id === 'string') {
+      const idString = video.Id as string;
+      return idString.trim().length > 0 ? idString.trim() : null;
+    }
+    return null;
+  })();
+  if (numericKey) {
+    keys.add(numericKey);
+  }
+  if (numericKey) {
+    keys.add(numericKey);
+  }
+  if (numericKey) {
+    keys.add(numericKey);
+  }
   if (numericKey) {
     keys.add(numericKey);
   }
@@ -883,213 +903,210 @@ function purgeVideoFromCache(
  *
  * Accepts either a numeric recordId or a VideoID string. If a string is provided, resolves it to the numeric Id.
  */
-export async function updateVideo(
+export function normalizeImportanceRating(value: unknown): number | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '') {
+      return null;
+    }
+
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed)) {
+      return null;
+    }
+
+    if (!Number.isInteger(parsed)) {
+      return null;
+    }
+
+    if (parsed < 1 || parsed > 5) {
+      return null;
+    }
+
+    return parsed;
+  }
+
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return null;
+    }
+
+    if (!Number.isInteger(value)) {
+      return null;
+    }
+
+    if (value < 1 || value > 5) {
+      return null;
+    }
+
+    return value;
+  }
+
+  return null;
+}
+
+export function normalizePersonalComment(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed === '' ? null : trimmed;
+  }
+
+  return null;
+}
+
+/**
+ * Simplified version of updateVideo for debugging purposes
+ * Uses only the direct v2 API endpoint without fallback logic
+ */
+export async function updateVideoSimple(
   recordIdOrVideoId: number | string,
   data: Partial<z.infer<typeof videoSchema>>,
   ncProjectIdParam?: string,
   ncTableIdParam?: string,
-  ncTableNameParam?: string,
 ): Promise<Video> {
   const config = getNocoDBConfig({
     projectId: ncProjectIdParam,
     tableId: ncTableIdParam,
-    tableName: ncTableNameParam,
   });
 
   const updateData = { ...data };
-  if (updateData.ImportanceRating !== undefined) {
-    const rating = Number(updateData.ImportanceRating);
-    updateData.ImportanceRating = Number.isFinite(rating) ? rating : null;
+
+  // Normalize data
+  if ('ImportanceRating' in updateData) {
+    const normalized = normalizeImportanceRating(updateData.ImportanceRating);
+    if (normalized === undefined) {
+      delete updateData.ImportanceRating;
+    } else {
+      updateData.ImportanceRating = normalized;
+    }
   }
 
-  const tableInfo = await resolveTableIdentifiers(
-    config.url,
-    config.token,
-    config.projectId,
-    config.tableId,
-    config.tableName,
-  );
+  if ('PersonalComment' in updateData) {
+    const normalizedComment = normalizePersonalComment(updateData.PersonalComment);
+    if (normalizedComment === undefined) {
+      delete updateData.PersonalComment;
+    } else {
+      updateData.PersonalComment = normalizedComment;
+    }
+  }
 
-  const tableIdForApi = tableInfo.resolvedTableId;
+  // Use the table ID directly instead of resolving metadata
+  const tableIdForApi = config.tableId;
 
-  let identifiers: ResolvedRecordIdentifiers;
+  void logDevEvent({
+    message: 'updateVideoSimple: using direct table ID',
+    payload: {
+      tableId: tableIdForApi,
+      videoId: recordIdOrVideoId,
+    },
+  });
+
   try {
-    identifiers = await resolveRecordIdentifiers(
-      recordIdOrVideoId,
-      config.projectId,
-      tableIdForApi,
-      undefined,
-    );
-
-    void logDevEvent({
-      message: 'updateVideo: identifiers resolved',
-      payload: {
-        input: recordIdOrVideoId,
-        numericId: identifiers.numericId,
-        rowId: identifiers.rowId ?? null,
-      },
-    });
-  } catch (error) {
-    void logDevError('updateVideo: identifier resolution failed', {
-      input: recordIdOrVideoId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw new Error(`Could not find video with ID: ${recordIdOrVideoId}`);
-  }
-
-  const attempts: Array<{ label: string; endpoint: string; run: () => Promise<unknown> }> = [];
-
-  if (identifiers.rowId) {
-    const rowEndpoint = `${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records/${encodeURIComponent(identifiers.rowId)}`;
-    attempts.push({
-      label: 'v2-rowId',
-      endpoint: rowEndpoint,
-      run: () =>
-        apiClient.patch(rowEndpoint, updateData, {
-          headers: {
-            'xc-token': config.token,
-            'Content-Type': 'application/json',
-          },
-        }),
-    });
-  }
-
-  const numericPathEndpoint = `${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records/${identifiers.numericId}`;
-  attempts.push({
-    label: 'v2-numeric-path',
-    endpoint: numericPathEndpoint,
-    run: () =>
-      apiClient.patch(numericPathEndpoint, updateData, {
+    // Step 1: Find the record by VideoID to get the Record-ID (Id field)
+    const findResponse = await apiClient.get(
+      `${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records`,
+      {
         headers: {
           'xc-token': config.token,
           'Content-Type': 'application/json',
         },
-      }),
-  });
-
-  const bulkEndpoint = `${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records`;
-  attempts.push({
-    label: 'v2-filter',
-    endpoint: bulkEndpoint,
-    run: () =>
-      apiClient.patch(
-        bulkEndpoint,
-        {
-          filter: `(Id,eq,${identifiers.numericId})`,
-          data: updateData,
+        params: {
+          where: `(VideoID,eq,${JSON.stringify(recordIdOrVideoId)})`,
+          fields: 'Id',
+          limit: 1,
         },
-        {
-          headers: {
-            'xc-token': config.token,
-            'Content-Type': 'application/json',
-          },
-        },
-      ),
-  });
-
-  attempts.push({
-    label: 'v2-records',
-    endpoint: bulkEndpoint,
-    run: () =>
-      apiClient.patch(
-        bulkEndpoint,
-        {
-          records: [
-            {
-              Id: identifiers.numericId,
-              ...updateData,
-            },
-          ],
-        },
-        {
-          headers: {
-            'xc-token': config.token,
-            'Content-Type': 'application/json',
-          },
-        },
-      ),
-  });
-
-  let lastError: unknown = null;
-
-  for (const attempt of attempts) {
-    try {
-      void logDevEvent({
-        message: 'updateVideo: attempting PATCH',
-        payload: {
-          label: attempt.label,
-          endpoint: attempt.endpoint,
-        },
-      });
-
-      await attempt.run();
-
-      const refreshed = await fetchVideoByRecordId(
-        identifiers.numericId,
-        config.projectId,
-        tableIdForApi,
-        undefined,
-      );
-
-      if (!refreshed) {
-        throw new Error('Updated video could not be reloaded after PATCH');
       }
+    );
 
-      cacheVideoRecord(refreshed as VideoRecordWithRowMeta, [
-        identifiers.numericId.toString(),
-        identifiers.rowId ?? undefined,
-        refreshed.VideoID ?? undefined,
-      ]);
-
-      void logDevEvent({
-        message: 'updateVideo: PATCH succeeded',
-        payload: {
-          label: attempt.label,
-          endpoint: attempt.endpoint,
-        },
-      });
-
-      return refreshed;
-    } catch (error) {
-      lastError = error;
-
-      if (axios.isAxiosError(error) && error.response?.status === 404) {
-        void logDevEvent({
-          message: 'updateVideo: 404 response',
-          payload: {
-            label: attempt.label,
-            endpoint: attempt.endpoint,
-            status: error.response.status,
-            data: error.response.data,
-          },
-        });
-        continue;
-      }
-
-      void logDevError('updateVideo: request failed', {
-        label: attempt.label,
-        endpoint: attempt.endpoint,
-        error: axios.isAxiosError(error)
-          ? {
-              status: error.response?.status,
-              data: error.response?.data,
-              message: error.message,
-            }
-          : error instanceof Error
-            ? { message: error.message }
-            : { message: String(error) },
-      });
+    // Extract the Record-ID from the response
+    const records = findResponse.data?.list || [];
+    if (!Array.isArray(records) || records.length === 0) {
+      throw new Error(`No video found with VideoID: ${recordIdOrVideoId}`);
     }
+
+    const recordId = records[0].Id;
+    if (!recordId || typeof recordId !== 'number') {
+      throw new Error(`Invalid Record-ID found for VideoID: ${recordIdOrVideoId}`);
+    }
+
+    void logDevEvent({
+      message: 'updateVideoSimple: found record by VideoID',
+      payload: {
+        videoId: recordIdOrVideoId,
+        recordId,
+      },
+    });
+
+    // Step 2: Update the record using the Record-ID in the request body
+    await apiClient.patch(
+      `${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records`,
+      {
+        Id: recordId,
+        ...updateData,
+      },
+      {
+        headers: {
+          'xc-token': config.token,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    void logDevEvent({
+      message: 'updateVideoSimple: record updated successfully',
+      payload: {
+        videoId: recordIdOrVideoId,
+        recordId,
+        updatedFields: Object.keys(updateData),
+      },
+    });
+
+    // Refresh the data to confirm it was saved
+    const refreshed = await fetchVideoByRecordIdDirect(
+      recordId,
+      config.projectId,
+      tableIdForApi,
+      config.token,
+    );
+
+    if (!refreshed) {
+      throw new Error('Updated video could not be reloaded after update');
+    }
+
+    void logDevEvent({
+      message: 'updateVideoSimple: update-by-key pattern completed successfully',
+      payload: {
+        videoId: recordIdOrVideoId,
+        recordId,
+        updatedFields: Object.keys(updateData),
+      },
+    });
+
+    return refreshed;
+  } catch (error) {
+    void logDevError('updateVideoSimple: update-by-key pattern failed', {
+      videoId: recordIdOrVideoId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    throw createRequestError('Failed to update video record', error ?? new Error('Unknown error'));
   }
-
-  void logDevError('updateVideo: all attempts failed', {
-    input: recordIdOrVideoId,
-    numericId: identifiers.numericId,
-    rowId: identifiers.rowId ?? null,
-    lastError: lastError instanceof Error ? lastError.message : String(lastError ?? 'unknown'),
-  });
-
-  throw createRequestError('Failed to update video record', lastError ?? new Error('Unknown error'));
 }
 
 /**
@@ -1147,40 +1164,12 @@ export async function deleteVideo(
 
   const deleteAttempts: Array<{ label: string; endpoint: string; run: () => Promise<unknown> }> = [];
 
-  if (identifiers.rowId) {
-    const rowDeleteEndpoint = `${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records/${encodeURIComponent(identifiers.rowId)}`;
-    deleteAttempts.push({
-      label: 'v2-rowId',
-      endpoint: rowDeleteEndpoint,
-      run: () =>
-        apiClient.delete(rowDeleteEndpoint, {
-          headers: {
-            'xc-token': config.token,
-            'Content-Type': 'application/json',
-          },
-        }),
-    });
-  }
-
-  const numericDeleteEndpoint = `${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records/${identifiers.numericId}`;
+  // Attempt 1: Filter-based delete (most reliable - doesn't require rowId)
   deleteAttempts.push({
-    label: 'v2-numeric-path',
-    endpoint: numericDeleteEndpoint,
+    label: 'v2-filter-delete',
+    endpoint: `${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records`,
     run: () =>
-      apiClient.delete(numericDeleteEndpoint, {
-        headers: {
-          'xc-token': config.token,
-          'Content-Type': 'application/json',
-        },
-      }),
-  });
-
-  const deleteEndpoint = `${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records`;
-  deleteAttempts.push({
-    label: 'v2-filter',
-    endpoint: deleteEndpoint,
-    run: () =>
-      apiClient.delete(deleteEndpoint, {
+      apiClient.delete(`${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records`, {
         headers: {
           'xc-token': config.token,
           'Content-Type': 'application/json',
@@ -1191,22 +1180,30 @@ export async function deleteVideo(
       }),
   });
 
-  if (identifiers.rowId) {
+  // Attempt 2: Numeric ID path (reliable when rowId is not available)
+  deleteAttempts.push({
+    label: 'v2-numeric-path',
+    endpoint: `${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records/${identifiers.numericId}`,
+    run: () =>
+      apiClient.delete(`${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records/${identifiers.numericId}`, {
+        headers: {
+          'xc-token': config.token,
+          'Content-Type': 'application/json',
+        },
+      }),
+  });
+
+  // Attempt 3: RowId path (least reliable - avoid when possible)
+  if (identifiers.rowId && typeof identifiers.rowId === 'string') {
+    const rowId = identifiers.rowId; // Type is narrowed to string here
     deleteAttempts.push({
-      label: 'v2-rows',
-      endpoint: deleteEndpoint,
+      label: 'v2-rowid-path',
+      endpoint: `${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records/${encodeURIComponent(rowId)}`,
       run: () =>
-        apiClient.delete(deleteEndpoint, {
+        apiClient.delete(`${config.url}/api/v2/tables/${encodeURIComponent(tableIdForApi)}/records/${encodeURIComponent(rowId)}`, {
           headers: {
             'xc-token': config.token,
             'Content-Type': 'application/json',
-          },
-          data: {
-            rows: [
-              {
-                rowId: identifiers.rowId,
-              },
-            ],
           },
         }),
     });
@@ -1228,13 +1225,16 @@ export async function deleteVideo(
 
       purgeVideoFromCache(identifiers.video, [
         identifiers.numericId.toString(),
-        identifiers.rowId ?? undefined,
-      ]);
+        identifiers.rowId && typeof identifiers.rowId === 'string' ? identifiers.rowId : undefined,
+      ].filter((item): item is string => item !== undefined));
 
       void logDevEvent({
-        message: 'deleteVideo: DELETE succeeded',
+        message: 'deleteVideo: simplified approach used',
         payload: {
-          label: attempt.label,
+          input: recordIdOrVideoId,
+          numericId: identifiers.numericId,
+          rowId: identifiers.rowId ?? null,
+          successfulMethod: attempt.label,
           endpoint: attempt.endpoint,
         },
       });
@@ -1271,7 +1271,7 @@ export async function deleteVideo(
     }
   }
 
-  void logDevError('deleteVideo: all attempts failed', {
+  void logDevError('deleteVideo: all simplified attempts failed', {
     input: recordIdOrVideoId,
     numericId: identifiers.numericId,
     rowId: identifiers.rowId ?? null,
@@ -1378,7 +1378,7 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      const requestParams: Record<string, string | number | undefined> = {
+      const requestParams: Record<string, string | number | boolean | null | undefined> = {
         limit,
         offset: (page - 1) * limit,
         sort: options?.sort,
@@ -1432,9 +1432,16 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
             fieldsToRequest = [];
           }
 
-          console.warn('Retrying NocoDB fetch without missing fields', {
-            missingFields,
-          });
+          // Only log if this is the first retry or if it's actually removing fields
+          if (originalLength > fieldsToRequest.length) {
+            void logDevEvent({
+              message: 'NocoDB fetch: removing missing fields',
+              payload: {
+                missingFields,
+                remainingFields: fieldsToRequest.length,
+              },
+            });
+          }
           continue;
         }
 
@@ -1573,7 +1580,7 @@ async function fetchSingleVideoRecord({
       ...(parsedVideo.data as Video),
     };
 
-    const responseRowId = extractRowIdFromRecord(videoData);
+    const responseRowId = extractRowIdFromRecord(videoData as Record<string, unknown>);
     if (responseRowId && !enrichedVideo.rowId && !enrichedVideo.RowId) {
       enrichedVideo.__rowId = responseRowId;
     }
@@ -1621,6 +1628,53 @@ async function fetchVideoByRecordId(
     tableId: ncTableIdParam,
     tableName: ncTableNameParam,
   });
+}
+
+async function fetchVideoByRecordIdDirect(
+  recordId: number,
+  projectId: string,
+  tableId: string,
+  token: string,
+): Promise<Video | null> {
+  const config = getNocoDBConfig({ projectId: projectId, tableId: tableId, token: token });
+  const endpointUrl = `${config.url}/api/v2/tables/${encodeURIComponent(tableId)}/records`;
+
+  try {
+    const response = await apiClient.get(endpointUrl, {
+      headers: { 'xc-token': config.token },
+      params: {
+        where: `(Id,eq,${recordId})`,
+        limit: 1,
+        includeSystemFields: 'true',
+      },
+    });
+
+    let list: unknown[] = [];
+    if (response.data && typeof response.data === 'object') {
+      if (Array.isArray((response.data as { list?: unknown[] }).list)) {
+        list = (response.data as { list: unknown[] }).list;
+      } else if (Array.isArray((response.data as { data?: unknown[] }).data)) {
+        list = (response.data as { data: unknown[] }).data;
+      }
+    }
+
+    if (!Array.isArray(list) || list.length === 0) {
+      return null;
+    }
+
+    const videoData = list[0];
+    const parsedVideo = videoSchema.safeParse(videoData);
+
+    if (!parsedVideo.success) {
+      console.error('Failed to parse NocoDB response:', parsedVideo.error.issues);
+      return null;
+    }
+
+    return parsedVideo.data as Video;
+  } catch (error) {
+    console.error('fetchVideoByRecordIdDirect failed:', error);
+    return null;
+  }
 }
 
 export async function fetchVideoByVideoId(

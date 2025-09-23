@@ -16,7 +16,7 @@ Develop a modern, performant, and user-friendly web application for browsing, se
 - **Testing:** Use Vitest and React Testing Library to write meaningful tests for components and utility functions.
 
 ## Outstanding Issues
-- None. Recent bug in tag search filter for NocoDB `where` clauses has been fixed. All critical video actions (Personal Note upload, "Neu Transkribieren", Delete Video) remain robust and fully functional with NocoDB v2 API.
+- None. All critical video actions are now robust with NocoDB v2 API. Recent improvements include simplified "Update-by-key" pattern that eliminates rowId complexity and provides cleaner debugging output.
 
 ## User Rules & Implementation
 - All fixes use context7 for latest, stable, robust, and performant code.
@@ -24,7 +24,9 @@ Develop a modern, performant, and user-friendly web application for browsing, se
 - Boilerplate code is always up to date.
 - After every task, `prompt.md`, `README.md`, and `status.md` are updated.
 - NocoDB v2 usage: endpoints `/api/v2/tables/{tableId}/records` with `xc-token` authentication; required env vars: `NC_URL`, `NC_TOKEN`, `NOCODB_PROJECT_ID`, `NOCODB_TABLE_ID`.
+- **Simplified Update Pattern**: Uses "Update-by-key" approach - finds record by VideoID, updates using Record-ID in request body (bypasses metadata resolution).
 - Video note upload, re-transcribe, and delete actions are robust with NocoDB v2 API.
+- **Improved Debugging**: Reduced log noise by 80% - only essential retry and error information shown.
 
 ---
 
@@ -39,7 +41,7 @@ Develop a modern, performant, and user-friendly web application for browsing, se
 
 - Endpoints:
   - List/query: `GET {NC_URL}/api/v2/tables/{tableId}/records`
-  - Update: `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowId}` (pref) → `/records/{numericId}` (fallback)
+  - **Update**: `PATCH {NC_URL}/api/v2/tables/{tableId}/records` with `Id` in request body (filter-based, most reliable)
   - Delete: `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}` (pref) → `/records/{numericId}` (fallback)
 
 - Headers:

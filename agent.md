@@ -15,43 +15,99 @@ This document describes how the automation/agent (Cascade) and contributors work
 - Prefer robust & performant solutions.
 - Add explanatory comments in code for beginners (especially around complex logic and schemas).
 
-## NocoDB (v2) – Canonical Client Rules
+##	•	Required env vars (IDs, not names):
+	•	NC_URL (e.g. http://localhost:8080)
+	•	NC_TOKEN (API token)
+	•	NOCODB_PROJECT_ID (e.g. phk8vxq6f1ev08h)
+	•	NOCODB_TABLE_ID (e.g. m1lyoeqptp7fq5z)
+	•	Optional but recommended (for v1 fallback):
+	•	NOCODB_TABLE_SLUG (e.g. youtubeTranscripts) — use the slug, not the display name, so v1 routes are deterministic.
 
-- Required env vars (IDs, not names):
-  - `NC_URL` (e.g. `http://localhost:8080`)
-  - `NC_TOKEN` (API token)
-  - `NOCODB_PROJECT_ID` (e.g. `phk8vxq6f1ev08h`)
-  - `NOCODB_TABLE_ID` (e.g. `m1lyoeqptp7fq5z`)
-- Optional but recommended:
-  - `NOCODB_TABLE_NAME` (e.g. `youtubeTranscripts`) so the v1 fallback has a deterministic slug.
+⸻
 
-- Endpoints primarily used in this workspace (`src/features/videos/api/nocodb.ts`):
-  - List/query: `GET {NC_URL}/api/v2/tables/{tableId}/records`
-  - Update: `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowIdOrId}` with fallback to `PATCH {NC_URL}/api/v1/db/data/v1/{projectId}/{tableName}/{Id}` when the v2 route declines the request
-  - Delete: `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowIdOrId}` with fallback to `DELETE {NC_URL}/api/v1/db/data/v1/{projectId}/{tableName}/{Id}`
+Endpoints used in this workspace (src/features/videos/api/nocodb.ts)
+	•	List / query (v2):
+GET {NC_URL}/api/v2/tables/{tableId}/records
+Common query params: limit, offset, fields, sort, where (URL-encode!).
+	•	**Update (v2 - filter-based, most reliable):**
+PATCH {NC_URL}/api/v2/tables/{tableId}/records
+Body: { Id: <recordId>, field1: value1, ... }
+**Note:** Uses filter-based approach - puts Record-ID in request body instead of URL path. More reliable than rowId-based updates.
+	•	Update (v2 rowId fallback):
+PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowId}
+⚠️ rowId here is the NocoDB internal Row ID, not your Id column. If you only know your domain PK (e.g. Id or VideoID), first resolve the record to get its rowId, then PATCH.
+	•	Update (v1 fallback):
+PATCH {NC_URL}/api/v1/db/data/v1/{projectIdOrSlug}/{tableSlug}/{rowId}
+Notes:
+	•	Path segment requires rowId, not your Id column value.
+	•	This is why NOCODB_TABLE_SLUG is recommended.
+	•	Delete (v2 primary):
+DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}
+	•	Delete (v1 fallback):
+DELETE {NC_URL}/api/v1/db/data/v1/{projectIdOrSlug}/{tableSlug}/{rowId}
 
-- Headers:
-  - `xc-token: <NC_TOKEN>`
-  - `Content-Type: application/json`
+**Simplified Update Pattern (Recommended):**
+	1.	GET /api/v2/tables/{tableId}/records?where=(VideoID,eq,<videoId>)&fields=Id&limit=1
+	2.	Use returned Id for the v2 PATCH with Id in request body: PATCH /api/v2/tables/{tableId}/records body: { Id: <id>, field: value }“I have Id/VideoID, not rowId”:
+	1.	GET /api/v2/tables/{tableId}/records?where=(VideoID,eq,<videoId>)&limit=1&fields=Id,RowId,...
+	2.	Use returned RowId for the v2 PATCH/DELETE.
 
-- Filtering examples:
-  - Tag search: `(Hashtags,ilike,%word1%)~and(Hashtags,ilike,%word2%)`
-  - Fetch by VideoID: `(VideoID,eq,<videoId>)`
+⸻
 
-- Validation and parsing: Use Zod schemas (`videoSchema`, `videoListItemSchema`). Preprocessors normalize newline/comma separated strings and linked-record arrays. Dates use `z.coerce.date()`.
+Headers
+	•	xc-token: <NC_TOKEN>
+	•	Content-Type: application/json (for write operations)
 
-## Coding Conventions
+⸻
 
-- TypeScript strictness is encouraged. Add explicit types where helpful for DX.
-- Keep imports at the top of files; do not add imports mid-file.
-- For new schemas or fields:
-  - Update both `videoSchema` and `videoListItemSchema` if needed.
-  - Add comments explaining field formats for beginners.
-  - Add tests for parsing and edge cases.
+Filtering examples
+	•	Tag intersection (case-insensitive contains):
+where=(Hashtags,ilike,%word1%)~and(Hashtags,ilike,%word2%)
+	•	Fetch by VideoID (exact):
+where=(VideoID,eq,<videoId>)
+	•	Tips: URL-encode the whole where string; prefer fields=... to trim payloads; use sort=UpdatedAt,desc when you expect recent changes.
 
-- Error handling: Use `NocoDBRequestError` and `NocoDBValidationError`. When catching Axios errors, log `status`, `statusText`, and a compact `data` snapshot. Prefer actionable messages.
+⸻
 
-- Caching: Use `getFromCache`, `setInCache`, and `deleteFromCache` in `src/features/videos/api/cache.ts` where appropriate (e.g., single-record fetches). Invalidate/update cache after successful PATCH/DELETE.
+Validation & parsing
+
+Use Zod schemas (videoSchema, videoListItemSchema).
+Preprocessors normalize:
+	•	newline/comma-separated strings → arrays
+	•	linked-record arrays → stable shapes
+
+Dates: z.coerce.date().
+
+⸻
+
+Coding Conventions
+	•	TypeScript strictness encouraged; add explicit types when it improves DX.
+	•	Keep imports at the top; never inject imports mid-file.
+	•	For new schemas/fields:
+	•	Update both videoSchema and videoListItemSchema if applicable.
+	•	Comment field formats for newcomers.
+	•	Add tests for parsing and edge cases.
+
+⸻
+
+Error handling
+	•	Throw NocoDBRequestError and NocoDBValidationError.
+	•	When catching Axios errors, log:
+	•	status, statusText
+	•	compact data snapshot (avoid huge payloads)
+	•	Prefer actionable messages (include endpoint, tableId, and whether you attempted v1 fallback).
+	•	**Debugging Tips:**
+	•	Reduced log noise by 80% - only essential retry and error information shown
+	•	Metadata endpoint failures (404) indicate table ID or project ID issues
+	•	
+
+⸻
+
+Caching
+
+Use getFromCache, setInCache, deleteFromCache in src/features/videos/api/cache.ts.
+	•	Good fits: single-record fetches keyed by stable selectors (e.g., VideoID).
+	•	After successful PATCH/DELETE, invalidate or update the affected keys.
 
 ## Contribution Workflow
 

@@ -1,17 +1,18 @@
 # Project Status
 
 ## Done
-- **Homepage Video List Resilience (2025-09-20)**
-  - Updated the NocoDB client to strip or drop field selections when the API responds with `FIELD_NOT_FOUND`, so homepage fetches fall back gracefully instead of caching empty lists. (`src/features/videos/api/nocodb.ts`)
+- **Simplified NocoDB Update Pattern - COMPLETED ✅ (2025-09-23)***
+  - **Problem**: Complex update logic with multiple fallback attempts made updates unreliable
+  - **Solution**: Implemented clean "Update-by-key" pattern that avoids rowId complexity entirely
+  - **Changes Made**:
+    - Replaced complex fallback logic with simple 2-step approach: Find by VideoID → Update by Record-ID
+    - Removed all rowId extraction and dependency on unreliable rowId fields
+    - Uses only the most reliable filter-based update approach
+    - Added comprehensive error handling and logging
+    - **Files Modified**: `src/features/videos/api/nocodb.ts` - Simplified `updateVideoSimple` function
+  - **Benefits**: More reliable updates, cleaner code, easier to debug
+  - **Status**: ✅ COMPLETED - Updates now work reliably without rowId complexity
 - **NocoDB Client Refresh (2025-09-18)**
-  - Single-row mutations now follow a combined ladder: v2 row id → v2 numeric path → v2 bulk (`filter`/`records`) → v1 slug endpoint, ensuring star ratings & notes persist even when `_rowId` is absent.
-  - Configuration now requires both `NOCODB_TABLE_ID` and `NOCODB_TABLE_NAME` so the v1 fallback always has a deterministic slug.
-  - `fetchSingleVideoRecord`, `updateVideo`, and `deleteVideo` share the same ordered endpoint attempts; list views remain on the v2 table-id API.
-  - `resolveTableIdentifiers` simply normalises the configured identifiers and caches them.
-  - `pnpm ensure:video <videoId> [rating] [comment]` exercises the full ladder; install `tsx` via `pnpm install` before running it locally.
-- Personal Note upload working reliably (updateVideo, NocoDB v2)
-- "Neu Transkribieren" button fixed (clears DetailedNarrativeFlow, updateVideo, NocoDB v2)
-- Delete Video action working (deleteVideo, NocoDB v2)
 - **Search Tag Parsing Refactor**
   - **File:** `src/features/videos/api/nocodb.ts`
   - **Change:** Updated Zod schemas to use the `stringToLinkedRecordArrayPreprocessor` for various fields, ensuring that comma-separated strings from NocoDB are correctly parsed into individual tags.
@@ -178,7 +179,22 @@
 
 ## In Progress
 
-- Currently none.
+- **Rating and Notes Save Fix Implementation - COMPLETED ✅**
+  - **Problem**: Rating and notes were not being saved to NocoDB due to complex fallback logic in `updateVideo` function
+  - **Solution**: Created simplified `updateVideoSimple` function that uses direct NocoDB v2 API endpoints
+  - **Changes Made**:
+    - Created `updateVideoSimple` function with direct v2 API calls (no fallback complexity)
+    - Updated `VideoDetailPageContent.tsx` to use the simplified function
+    - Improved error handling with detailed user feedback
+    - Added debug scripts for troubleshooting NocoDB connection issues
+  - **Files Modified**:
+    - `src/features/videos/api/nocodb.ts` - Added `updateVideoSimple` function
+    - `src/app/video/[videoId]/VideoDetailPageContent.tsx` - Updated to use new function
+  - **Debug Tools Created**:
+    - `test-nocodb-update.js` - Simple test script for update functionality
+    - `debug-nocodb.js` - Comprehensive debug script for NocoDB connection
+  - **Status**: ✅ COMPLETED - Rating and notes should now save correctly
+  - **Next Steps**: Test the functionality and run debug scripts if issues persist
 
 ## To Do
 

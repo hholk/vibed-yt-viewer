@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
-import { getNocoDBConfig } from './nocodb';
+
+import { getNocoDBConfig, normalizeImportanceRating, normalizePersonalComment } from './nocodb';
 
 describe('getNocoDBConfig', () => {
   const OLD_ENV = process.env;
@@ -64,5 +65,50 @@ describe('getNocoDBConfig', () => {
     expect(config.token).toBe('arg-token');
     expect(config.projectId).toBe('arg-project-id');
     expect(config.tableId).toBe('arg-table-id');
+  });
+});
+
+describe('normalizeImportanceRating', () => {
+  it('returns undefined when value is undefined', () => {
+    expect(normalizeImportanceRating(undefined)).toBeUndefined();
+  });
+
+  it('returns null when value is null or empty', () => {
+    expect(normalizeImportanceRating(null)).toBeNull();
+    expect(normalizeImportanceRating('')).toBeNull();
+    expect(normalizeImportanceRating('   ')).toBeNull();
+  });
+
+  it('normalizes valid numeric inputs', () => {
+    expect(normalizeImportanceRating(3)).toBe(3);
+    expect(normalizeImportanceRating('4')).toBe(4);
+  });
+
+  it('rejects non-integer or out-of-range values', () => {
+    expect(normalizeImportanceRating(0)).toBeNull();
+    expect(normalizeImportanceRating(6)).toBeNull();
+    expect(normalizeImportanceRating('2.5')).toBeNull();
+    expect(normalizeImportanceRating('abc')).toBeNull();
+  });
+});
+
+describe('normalizePersonalComment', () => {
+  it('returns undefined when value is undefined', () => {
+    expect(normalizePersonalComment(undefined)).toBeUndefined();
+  });
+
+  it('returns null for null or whitespace-only strings', () => {
+    expect(normalizePersonalComment(null)).toBeNull();
+    expect(normalizePersonalComment('')).toBeNull();
+    expect(normalizePersonalComment('   ')).toBeNull();
+  });
+
+  it('trims non-empty strings', () => {
+    expect(normalizePersonalComment('  hello  ')).toBe('hello');
+  });
+
+  it('returns null for non-string values', () => {
+    expect(normalizePersonalComment(5)).toBeNull();
+    expect(normalizePersonalComment({})).toBeNull();
   });
 });

@@ -7,7 +7,7 @@ import Image from 'next/image';
 import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy, Trash2, XCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Video, VideoListItem } from '@/features/videos/api/nocodb';
-import { updateVideo, deleteVideo } from '@/features/videos/api/nocodb';
+import { updateVideoSimple, deleteVideo } from '@/features/videos/api/nocodb';
 import { StarRating } from '@/features/videos/components';
 
 export type { Video, VideoListItem } from '@/features/videos/api/nocodb';
@@ -383,7 +383,7 @@ export function VideoDetailPageContent({
     setIsSaving(true);
     setSaveError(null);
     try {
-      await updateVideo(currentVideo.Id, { DetailedNarrativeFlow: null });
+      await updateVideoSimple(currentVideo.Id, { DetailedNarrativeFlow: null });
       setCurrentVideo(prev => ({ ...prev!, DetailedNarrativeFlow: null })); // No alert, UI will update
     } catch (error) {
       console.error('Failed to clear narrative:', error);
@@ -463,41 +463,73 @@ export function VideoDetailPageContent({
   }, [previousVideo, nextVideo, router, searchParams]);
 
   const handleSaveComment = async () => {
-    if (!currentVideo?.Id) return;
+    if (!currentVideo?.Id) {
+      setSaveError('No video selected');
+      return;
+    }
     setIsSaving(true);
     setSaveError(null);
     try {
       const updatedFields = { PersonalComment: personalComment };
-      await updateVideo(currentVideo.Id, updatedFields);
+      await updateVideoSimple(currentVideo.Id, updatedFields);
       setCurrentVideo(prev => ({ ...prev!, ...updatedFields }));
       setIsEditingComment(false);
     } catch (error) {
       console.error('Failed to save comment:', error);
-      setSaveError(error instanceof Error ? error.message : 'An unknown error occurred.');
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+
+      // Provide more specific error messages based on error type
+      let userMessage = `Failed to save note: ${errorMessage}`;
+      if (errorMessage.includes('404') || errorMessage.includes('Cannot PATCH')) {
+        userMessage = 'Note save failed: Your NocoDB API token may not have update permissions. Please check your NocoDB dashboard settings and create a new API token with write access.';
+      } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+        userMessage = 'Note save failed: Access denied. Please check your NocoDB API token permissions.';
+      } else if (errorMessage.includes('500')) {
+        userMessage = 'Note save failed: NocoDB server error. Please try again later.';
+      }
+
+      setSaveError(`${userMessage}. Check browser console for details.`);
     } finally {
       setIsSaving(false);
+
     }
   };
-  
-  
-  const handleRatingChange = async (newRating: number | null, field: keyof Video) => {
-    if (!currentVideo?.Id) return;
 
-    
+  const handleRatingChange = async (newRating: number | null, field: keyof Video) => {
+    if (!currentVideo?.Id) {
+      setSaveError('No video selected');
+      return;
+    }
+
     if (field === 'ImportanceRating') {
       setActiveImportanceRating(newRating);
     }
-    
 
     setIsSaving(true); 
     setSaveError(null);
     try {
       const updatedFields = { [field]: newRating };
-      await updateVideo(currentVideo.Id, updatedFields);
+      // Use the simplified update function for better reliability
+      const updatedVideo = await updateVideoSimple(currentVideo.Id, updatedFields);
       setCurrentVideo(prev => ({ ...prev!, ...updatedFields as Partial<Video> }));
+      
+      // Also update the state with the refreshed data from NocoDB
+      setCurrentVideo(updatedVideo);
     } catch (error) {
       console.error(`Failed to save ${field}:`, error);
-      setSaveError(error instanceof Error ? error.message : `Failed to save ${String(field)}.`);
+      const errorMessage = error instanceof Error ? error.message : `Failed to save ${String(field)}`;
+
+      // Provide more specific error messages based on error type
+      let userMessage = `Rating save failed: ${errorMessage}`;
+      if (errorMessage.includes('404') || errorMessage.includes('Cannot PATCH')) {
+        userMessage = 'Rating save failed: Your NocoDB API token may not have update permissions. Please check your NocoDB dashboard settings and create a new API token with write access.';
+      } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+        userMessage = 'Rating save failed: Access denied. Please check your NocoDB API token permissions.';
+      } else if (errorMessage.includes('500')) {
+        userMessage = 'Rating save failed: NocoDB server error. Please try again later.';
+      }
+
+      setSaveError(`${userMessage}. Check browser console for details.`);
       
       if (field === 'ImportanceRating') {
         setActiveImportanceRating(currentVideo.ImportanceRating || null);

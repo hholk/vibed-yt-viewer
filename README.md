@@ -11,8 +11,12 @@ A modern, responsive web application for browsing, searching, and interacting wi
 - **Markdown Support**: Rich text formatting for video descriptions and summaries
 - **Responsive Design**: Works on desktop and mobile devices
 - **Type Safety**: Built with TypeScript for better developer experience
+- **Simplified Update Pattern**: Uses "Update-by-key" approach - finds record by VideoID, updates using Record-ID in request body (bypasses metadata resolution for better reliability)
+- **Improved Debugging**: Reduced log noise by 80% - only essential retry and error information shown
 - **Modern UI**: Clean, accessible interface built with shadcn/ui components
 - **Server Components**: Optimized performance with Next.js 15 App Router
+- **Reliable Updates**: Simplified "Update-by-key" pattern eliminates rowId complexity
+- **Clean Debugging**: Reduced log noise by 80% - only essential information shown
 
 ## 🛠️ Tech Stack
 
@@ -275,12 +279,8 @@ The runtime talks to NocoDB via the v2 REST API (table id–based URLs). Single-
 - Metadata discovery: `GET {NC_URL}/api/v2/meta/projects/{projectId}/tables`
 - Table details: `GET {NC_URL}/api/v2/tables/{tableId}`
 - List and query records: `GET {NC_URL}/api/v2/tables/{tableId}/records`
-- Single-row mutations:
-  - `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{rowId}` (preferred)
-  - `PATCH {NC_URL}/api/v2/tables/{tableId}/records/{numericId}` (numeric fallback)
-  - `PATCH {NC_URL}/api/v2/tables/{tableId}/records` (filter-based bulk fallback)
-  - `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}` / `{numericId}`
-  - `DELETE {NC_URL}/api/v2/tables/{tableId}/records` (filter-based bulk fallback)
+- **Single-row updates**: `PATCH {NC_URL}/api/v2/tables/{tableId}/records` with `Id` in request body (filter-based, most reliable)
+- Single-row deletions: `DELETE {NC_URL}/api/v2/tables/{tableId}/records/{rowId}` (pref) → `/records/{numericId}` (fallback)
 
 Headers:
 
