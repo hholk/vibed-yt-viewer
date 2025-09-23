@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '25');
+    const limit = parseInt(searchParams.get('limit') || '35');
     const sort = searchParams.get('sort') || '-CreatedAt';
 
     console.log('🎯 API request received:', { page, limit, sort });
@@ -57,7 +57,10 @@ export async function GET(request: NextRequest) {
 
     const response = {
       videos: result.videos,
-      pageInfo: result.pageInfo,
+      pageInfo: {
+        ...result.pageInfo,
+        hasNextPage: !result.pageInfo.isLastPage,
+      },
       success: true,
       debug: {
         requestedPage: page,

@@ -8,6 +8,7 @@ const mockVideos = [
     Description: 'This is a test video',
     Channel: 'Test Channel',
     VideoID: 'test123',
+    ThumbHigh: 'test-thumb.jpg',
     Hashtags: ['test', 'video'],
     Persons: [{ Title: 'John Doe' }],
     CreatedAt: new Date('2023-01-01'),
@@ -33,8 +34,11 @@ describe('SearchComponent', () => {
     const input = screen.getByPlaceholderText('Search videos... (e.g., \'machine learning\', \'John Doe\', \'#ai\')');
     fireEvent.change(input, { target: { value: 'machine learning' } });
 
+    // Focus the input to trigger the category selector
+    fireEvent.focus(input);
+
     // Click the add button (this would appear after typing)
-    const addButton = screen.getByText('Add "machine learning" as tag');
+    const addButton = screen.getByText(/Add "machine learning" as tag/);
     fireEvent.click(addButton);
 
     expect(screen.getByText('📝 machine learning')).toBeInTheDocument();
@@ -46,7 +50,10 @@ describe('SearchComponent', () => {
     const input = screen.getByPlaceholderText('Search videos... (e.g., \'machine learning\', \'John Doe\', \'#ai\')');
     fireEvent.change(input, { target: { value: 'machine learning' } });
 
-    const addButton = screen.getByText('Add "machine learning" as tag');
+    // Focus the input to trigger the category selector
+    fireEvent.focus(input);
+
+    const addButton = screen.getByText(/Add "machine learning" as tag/);
     fireEvent.click(addButton);
 
     const tag = screen.getByText('📝 machine learning');
@@ -62,7 +69,10 @@ describe('SearchComponent', () => {
     const input = screen.getByPlaceholderText('Search videos... (e.g., \'machine learning\', \'John Doe\', \'#ai\')');
     fireEvent.change(input, { target: { value: 'machine learning' } });
 
-    const addButton = screen.getByText('Add "machine learning" as tag');
+    // Focus the input to trigger the category selector
+    fireEvent.focus(input);
+
+    const addButton = screen.getByText(/Add "machine learning" as tag/);
     fireEvent.click(addButton);
 
     const clearButton = screen.getByText('Clear all');

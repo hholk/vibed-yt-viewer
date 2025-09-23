@@ -6,10 +6,11 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q') || '';
     const categories = searchParams.get('categories')?.split(',').filter(Boolean) || [];
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = parseInt(searchParams.get('limit') || '35');
+    const offset = parseInt(searchParams.get('offset') || '0');
     const sort = searchParams.get('sort') || '-CreatedAt';
 
-    console.log('🔍 Search API request:', { query, categories, limit, sort });
+    console.log('🔍 Search API request:', { query, categories, limit, offset, sort });
 
     if (!query.trim()) {
       return NextResponse.json({
@@ -143,12 +144,12 @@ export async function GET(request: NextRequest) {
       return 0;
     });
 
-    const limitedVideos = sortedVideos.slice(0, limit);
+    const paginatedVideos = sortedVideos.slice(offset, offset + limit);
 
-    console.log(`🎯 Search results: ${limitedVideos.length} videos found for query "${query}"`);
+    console.log(`🎯 Search results: ${paginatedVideos.length} videos found for query "${query}" (offset: ${offset}, limit: ${limit})`);
 
     return NextResponse.json({
-      videos: limitedVideos,
+      videos: paginatedVideos,
       total: matchingVideos.length,
       success: true,
       query,

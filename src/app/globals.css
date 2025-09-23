@@ -124,25 +124,10 @@
   --input: oklch(0.22 0.01 250); /* Input field background, slightly lighter than border */
   --ring: oklch(0.75 0.15 265); /* Ring color, often same as primary */
 
-  /* Brand color adjustment for dark theme */
-  /* --brand-hue, --brand-saturation are inherited from :root */
-  --brand-lightness: 85%; /* Makes brand color light for dark background */
-
-  /* Chart and Sidebar colors (can be refined further if used extensively) */
-  --chart-1: oklch(0.65 0.22 40);
-  --chart-2: oklch(0.6 0.12 185);
-  --chart-3: oklch(0.4 0.07 225);
-  --chart-4: oklch(0.8 0.19 85);
-  --chart-5: oklch(0.75 0.19 70);
-
-  --sidebar: oklch(0.12 0 0); /* Slightly darker than main background for depth, ~#1A1A1A */
-  --sidebar-foreground: oklch(0.95 0 0);
-  --sidebar-primary: oklch(0.75 0.15 265);
-  --sidebar-primary-foreground: oklch(0.1 0 0);
-  --sidebar-accent: oklch(0.3 0.03 260);
-  --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.18 0 0);
-  --sidebar-ring: oklch(0.75 0.15 265);
+  /* Search Component Colors */
+  --search-bg: oklch(0.3 0.01 260); /* neutral-800/50 for search container */
+  --search-text: oklch(0.98 0 0); /* neutral-50 */
+  --search-muted: oklch(0.554 0.046 257.417); /* neutral-400 for muted text */
 }
 
 @layer base {

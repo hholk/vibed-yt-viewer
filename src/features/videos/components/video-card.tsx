@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import type { VideoListItem } from '@/features/videos/api/nocodb';
 
 interface VideoCardProps {
@@ -10,14 +9,20 @@ interface VideoCardProps {
 }
 
 export function VideoCard({ video, priority = false }: VideoCardProps) {
-  
+
   const thumbnailUrl = video.ThumbHigh && typeof video.ThumbHigh === 'string' ? video.ThumbHigh : null;
 
   return (
-    
+
     <Link href={`/video/${video.VideoID}`} passHref className="block hover:shadow-lg transition-shadow duration-200 rounded-lg h-full">
-      <Card className="w-full flex flex-col h-full bg-card text-card-foreground p-0">
-        <CardHeader className="p-0 rounded-t-lg overflow-hidden">
+      <div
+        className="w-full flex flex-col h-full rounded-lg shadow-sm hover:shadow-md transition-shadow"
+        style={{
+          backgroundColor: 'var(--video-card-bg)',
+          color: 'var(--video-card-text)'
+        }}
+      >
+        <div className="p-0 rounded-t-lg overflow-hidden">
           {thumbnailUrl ? (
             <div className="relative w-full aspect-video">
               <Image
@@ -30,24 +35,35 @@ export function VideoCard({ video, priority = false }: VideoCardProps) {
               />
             </div>
           ) : (
-            <div className="relative w-full aspect-video bg-muted flex items-center justify-center rounded-t-lg">
-              <span className="text-sm text-muted-foreground">No Thumbnail</span>
+            <div
+              className="relative w-full aspect-video flex items-center justify-center rounded-t-lg"
+              style={{ backgroundColor: 'var(--video-card-placeholder)' }}
+            >
+              <span style={{ color: 'var(--video-card-meta)' }}>No Thumbnail</span>
             </div>
           )}
-        </CardHeader>
-        <CardContent className="p-2 flex-grow flex flex-col justify-between -mt-px">
+        </div>
+        <div className="p-2 flex-grow flex flex-col justify-between">
           <div>
-            <CardTitle className="text-base font-semibold line-clamp-2 mb-0.5" title={video.Title ?? undefined}>
+            <h3
+              className="text-base font-semibold line-clamp-2 mb-0.5"
+              style={{ color: 'var(--video-card-title)' }}
+              title={video.Title ?? undefined}
+            >
               {video.Title}
-            </CardTitle>
+            </h3>
             {video.Channel && (
-              <p className="text-xs text-muted-foreground truncate mb-0.5" title={video.Channel}>
+              <p
+                className="text-xs truncate mb-0.5"
+                style={{ color: 'var(--video-card-meta)' }}
+                title={video.Channel}
+              >
                 {video.Channel}
               </p>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </Link>
   );
 }

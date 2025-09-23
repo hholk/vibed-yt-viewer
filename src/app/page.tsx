@@ -1,7 +1,6 @@
 import { fetchVideos, type VideoListItem, videoListItemSchema, type PageInfo } from "@/features/videos/api/nocodb";
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Terminal } from 'lucide-react';
-import { VideoListClient } from '@/features/videos/components';
 import { SearchComponent } from '@/shared/components/search-component';
 
 export default async function HomePage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ sort?: string; [key: string]: string | string[] | undefined }> }) {
@@ -15,10 +14,10 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
     const sortParam = resolvedSearchParams.sort;
     const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt';
 
-    // Only fetch the first page (25 items) for faster initial load
+    // Only fetch the first page (35 items) for faster initial load
     const fetchedVideosData = await fetchVideos({
       sort: currentSort,
-      limit: 25, // Reduced from 50 to 25 for faster initial load
+      limit: 35, // Reduced to 35 for optimal initial load
       fields: [
         'Id',
         'rowId',
@@ -67,49 +66,56 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
 
   if (error) {
     return (
-      <div className="container mx-auto p-4">
-        <Alert variant="destructive">
-          <Terminal className="h-4 w-4" />
-          <AlertTitle>Error Fetching Videos</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+      <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
+        <div className="container mx-auto max-w-5xl">
+          <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
+            <h1 className="text-3xl font-semibold text-neutral-100">Video Collection</h1>
+          </div>
+          <Alert variant="destructive" className="bg-red-900/30 border-red-600 text-red-300">
+            <Terminal className="h-4 w-4" />
+            <AlertTitle>Error Fetching Videos</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </div>
       </div>
     );
   }
 
   if (!videos || videos.length === 0) {
     return (
-      <div className="container mx-auto p-4">
-        <Alert>
-          <Terminal className="h-4 w-4" />
-          <AlertTitle>No Videos Found</AlertTitle>
-          <AlertDescription>
-            There are currently no videos to display. Check back later or add some via NocoDB.
-          </AlertDescription>
-        </Alert>
+      <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
+        <div className="container mx-auto max-w-5xl">
+          <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
+            <h1 className="text-3xl font-semibold text-neutral-100">Video Collection</h1>
+          </div>
+          <Alert className="bg-neutral-800/50 border-neutral-600 text-neutral-300 p-4 rounded-lg">
+            <Terminal className="h-4 w-4" />
+            <AlertTitle>No Videos Found</AlertTitle>
+            <AlertDescription>
+              There are currently no videos to display. Check back later or add some via NocoDB.
+            </AlertDescription>
+          </Alert>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold font-mono text-brand">Video Collection</h1>
-        <div className="text-sm text-muted-foreground">
-          {pageInfo?.totalRows || 0} total videos
+    <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
+      <div className="container mx-auto max-w-5xl">
+        <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
+          <h1 className="text-3xl font-semibold text-neutral-100 break-words hyphens-auto" title="Video Collection">
+            Video Collection
+          </h1>
+          <div className="text-sm text-neutral-400">
+            {pageInfo?.totalRows || 0} total videos
+          </div>
         </div>
-      </div>
 
-      {/* Search Component */}
-      <SearchComponent initialVideos={videos} />
-
-      {/* Original Video List (shown when no search is active) */}
-      <div id="video-list-section" className="hidden">
-        <VideoListClient
-          videos={videos}
-          pageInfo={pageInfo}
-          initialSort={resolvedSearchParams?.sort || '-CreatedAt'}
-        />
+        {/* Search Component - styled like video page */}
+        <div className="search-component-wrapper">
+          <SearchComponent initialVideos={videos} />
+        </div>
       </div>
     </div>
   );

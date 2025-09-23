@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
-import { Badge } from "@/shared/components/ui/badge";
-import { Button } from "@/shared/components/ui/button";
-import { Input } from "@/shared/components/ui/input";
-import { Card, CardContent } from "@/shared/components/ui/card";
-import { X, Search, Loader2, Filter, Tag } from "lucide-react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { Search, Tag, Filter, X, Loader2 } from 'lucide-react';
+import { Input } from '@/shared/components/ui/input';
+import { Button } from '@/shared/components/ui/button';
+import { Card, CardContent } from '@/shared/components/ui/card';
+import { Badge } from '@/shared/components/ui/badge';
+import { VideoCard } from '@/features/videos/components/video-card';
 import type { VideoListItem } from "@/features/videos/api/nocodb";
-import { VideoCard } from "@/features/videos/components/video-card";
 
 interface SearchTag {
   id: string;
@@ -42,13 +42,18 @@ const SEARCH_CATEGORIES = [
   { key: 'ticker', label: 'Ticker', icon: '📊' },
 ];
 
-export function SearchComponent({ initialVideos = [], className }: SearchComponentProps) {
+export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTags, setSearchTags] = useState<SearchTag[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [searchResults, setSearchResults] = useState<VideoListItem[]>(initialVideos);
+  const [searchResults, setSearchResults] = useState<VideoListItem[]>(initialVideos); // Initialize with initialVideos
   const [isSearching, setIsSearching] = useState(false);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(initialVideos.length >= 25); // Assume more if we got a full page
+  const [totalResults, setTotalResults] = useState(0);
+  const loadingRef = useRef<HTMLDivElement>(null);
+  const isLoadingRef = useRef(false);
 
   // Generate unique ID for tags
   const generateTagId = useCallback(() => {
@@ -92,47 +97,129 @@ export function SearchComponent({ initialVideos = [], className }: SearchCompone
   const clearAllTags = useCallback(() => {
     setSearchTags([]);
     setSelectedCategories([]);
-    setSearchResults(initialVideos);
-  }, [initialVideos]);
+    setSearchResults([]);
+    setCurrentPage(1);
+    setHasNextPage(true);
+    setTotalResults(0);
+  }, []);
 
   // Perform search
-  const performSearch = useCallback(async () => {
+  const performSearch = useCallback(async (isLoadMore = false) => {
     if (searchTags.length === 0) {
-      setSearchResults(initialVideos);
+      // Show all videos when no search tags - only load more, don't replace existing
+      if (isLoadMore && isLoadingRef.current) {
+        return;
+      }
+
+      isLoadingRef.current = true;
+
+      try {
+        const page = currentPage; // Use current page number, not currentPage + 1
+        const response = await fetch(`/api/videos?page=${page}&limit=35&sort=-CreatedAt`);
+        const data = await response.json();
+
+        if (data.success && data.videos && data.videos.length > 0) {
+          setSearchResults(prev => {
+            // Remove any potential duplicates by filtering out videos that already exist
+            const existingIds = new Set(prev.map(v => v.Id));
+            const newVideos = data.videos.filter((v: VideoListItem) => !existingIds.has(v.Id));
+            return [...prev, ...newVideos];
+          });
+          setCurrentPage(prev => prev + 1); // Increment after successful load
+          setHasNextPage(data.pageInfo?.hasNextPage ?? false);
+          setTotalResults(data.pageInfo?.totalRows || 0);
+        } else {
+          setHasNextPage(false);
+        }
+      } catch (error) {
+        console.error('Error loading videos:', error);
+        setHasNextPage(false);
+      } finally {
+        isLoadingRef.current = false;
+      }
       return;
     }
 
-    setIsSearching(true);
+    // Handle search case
+    if (isLoadMore && isLoadingRef.current) {
+      return;
+    }
+
+    isLoadingRef.current = true;
+    if (!isLoadMore) {
+      setIsSearching(true);
+      setCurrentPage(1); // Start from page 1 for new searches
+    }
 
     try {
       const query = searchTags.map(tag => tag.value).join(' ');
       const categories = selectedCategories.length > 0 ? selectedCategories : SEARCH_CATEGORIES.map(cat => cat.key);
+      const page = isLoadMore ? currentPage : 1;
+      const offset = (page - 1) * 35;
 
-      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&categories=${encodeURIComponent(categories.join(','))}&limit=100`);
+      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&categories=${encodeURIComponent(categories.join(','))}&limit=35&offset=${offset}&sort=-CreatedAt`);
       const data = await response.json();
 
       if (data.success) {
-        setSearchResults(data.videos || []);
+        if (isLoadMore) {
+          setSearchResults(prev => [...prev, ...(data.videos || [])]);
+          setCurrentPage(prev => prev + 1);
+        } else {
+          setSearchResults(data.videos || []);
+          setCurrentPage(1);
+          setHasNextPage((data.videos?.length || 0) === 35);
+          setTotalResults(data.total || 0);
+        }
       } else {
         console.error('Search failed:', data.error);
-        setSearchResults([]);
+        if (!isLoadMore) {
+          setSearchResults([]);
+          setHasNextPage(false);
+          setTotalResults(0);
+        }
       }
     } catch (error) {
       console.error('Search error:', error);
-      setSearchResults([]);
+      if (!isLoadMore) {
+        setSearchResults([]);
+        setHasNextPage(false);
+        setTotalResults(0);
+      }
     } finally {
       setIsSearching(false);
+      isLoadingRef.current = false;
     }
-  }, [searchTags, selectedCategories, initialVideos]);
+  }, [searchTags, selectedCategories, currentPage]);
 
-  // Trigger search when tags change
+  // Initialize searchResults with initialVideos
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      performSearch();
-    }, 300); // Debounce search
+    if (searchTags.length === 0 && searchResults.length === 0 && initialVideos.length > 0) {
+      setSearchResults(initialVideos);
+      setCurrentPage(1);
+      setHasNextPage(initialVideos.length >= 35); // Assume more if we got a full page
+      setTotalResults(0); // Will be updated when API is called
+    }
+  }, [searchTags.length, searchResults.length, initialVideos]);
 
-    return () => clearTimeout(timeoutId);
-  }, [performSearch]);
+  // Infinite scroll implementation
+  const handleScroll = useCallback(() => {
+    if (!loadingRef.current || isLoadingRef.current || !hasNextPage) {
+      return;
+    }
+
+    const rect = loadingRef.current.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    const isNearBottom = rect.top <= windowHeight + 300; // Trigger 300px before loading indicator reaches bottom
+
+    if (isNearBottom && hasNextPage) {
+      performSearch(true);
+    }
+  }, [hasNextPage, performSearch]);
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -164,7 +251,7 @@ export function SearchComponent({ initialVideos = [], className }: SearchCompone
   }, [searchQuery]);
 
   return (
-    <div className={`space-y-4 ${className || ''}`}>
+    <div className="space-y-4">
       {/* Search Input */}
       <Card>
         <CardContent className="p-4">
@@ -309,7 +396,9 @@ export function SearchComponent({ initialVideos = [], className }: SearchCompone
             <span className="text-sm text-muted-foreground">
               {isSearching
                 ? 'Searching...'
-                : `${searchResults.length} video${searchResults.length !== 1 ? 's' : ''} found`
+                : searchTags.length > 0
+                  ? `${searchResults.length}${totalResults > searchResults.length ? ` of ${totalResults}` : ''} video${searchResults.length !== 1 ? 's' : ''} found`
+                  : `${searchResults.length}${totalResults > searchResults.length ? ` of ${totalResults}` : ''} video${searchResults.length !== 1 ? 's' : ''} total`
               }
             </span>
           </div>
@@ -320,23 +409,37 @@ export function SearchComponent({ initialVideos = [], className }: SearchCompone
           )}
         </div>
 
-        {/* Results Grid */}
+        {/* Results Grid - Always show first */}
         {searchResults.length > 0 && (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
             {searchResults.map((video, index) => (
-              <VideoCard key={video.Id} video={video} priority={index === 0} />
+              <VideoCard key={`${video.Id}-${index}`} video={video} priority={index === 0} />
             ))}
           </div>
         )}
 
-        {/* No Results */}
-        {!isSearching && searchTags.length > 0 && searchResults.length === 0 && (
-          <div className="text-center py-8">
-            <div className="text-muted-foreground">
-              <Search className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No videos found matching your search criteria.</p>
-              <p className="text-sm">Try adjusting your search terms or categories.</p>
+        {/* Infinite scroll loading indicator - always render when hasNextPage to enable scroll detection */}
+        {hasNextPage && (
+          <div
+            ref={loadingRef}
+            className={`flex justify-center items-center py-8 ${isLoadingRef.current ? '' : 'opacity-0'}`}
+          >
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className={`h-4 w-4 ${isLoadingRef.current ? 'animate-spin' : ''}`} />
+              <span>{isLoadingRef.current ? 'Loading more videos...' : 'Scroll for more videos'}</span>
             </div>
+          </div>
+        )}
+
+        {/* End of content message - show only when not loading and no more pages */}
+        {!hasNextPage && searchResults.length > 0 && !isLoadingRef.current && (
+          <div className="flex justify-center py-8">
+            <p className="text-muted-foreground">
+              {searchTags.length > 0
+                ? "You've reached the end of the search results"
+                : "You've reached the end of the video collection"
+              }
+            </p>
           </div>
         )}
       </div>
