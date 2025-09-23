@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
       // Remove duplicates
       const uniqueFields = Array.from(new Set(fieldsToSearch));
 
-      return searchTerms.some(term =>
+      return searchTerms.every(term =>
         uniqueFields.some(field => {
           const value = video[field as keyof VideoListItem];
           if (value === null || value === undefined) return false;

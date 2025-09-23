@@ -191,6 +191,13 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
     }
   }, [searchTags, selectedCategories, currentPage]);
 
+  // Trigger search when dependencies change
+  useEffect(() => {
+    if (searchTags.length > 0 || (searchTags.length === 0 && initialVideos.length === 0)) {
+      performSearch(false);
+    }
+  }, [searchTags, selectedCategories, currentPage, performSearch, initialVideos.length]);
+
   // Initialize searchResults with initialVideos
   useEffect(() => {
     if (searchTags.length === 0 && searchResults.length === 0 && initialVideos.length > 0) {
@@ -228,11 +235,8 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
         setShowCategorySelector(false);
       }
       if (e.key === 'Enter' && searchQuery.trim()) {
-        if (selectedCategories.length === 1) {
-          addSearchTag(searchQuery, selectedCategories[0]);
-        } else {
-          setShowCategorySelector(true);
-        }
+        e.preventDefault();
+        addSearchTag(searchQuery, selectedCategories[0] || 'title');
       }
     };
 
@@ -296,7 +300,7 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search videos... (e.g., 'machine learning', 'John Doe', '#ai')"
+                  placeholder="Search videos... (e.g., 'machine learning' → add tags with Enter)"
                   className="pl-10 pr-20"
                   onFocus={() => searchQuery.trim() && setShowCategorySelector(true)}
                 />
@@ -377,6 +381,13 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
                     </Badge>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Search Logic Info */}
+            {searchTags.length > 1 && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <span>🔍 Multiple tags are combined with AND logic</span>
               </div>
             )}
           </div>
