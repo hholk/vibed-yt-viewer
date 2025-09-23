@@ -1826,18 +1826,209 @@ interface FetchAllVideosOptions<T extends z.ZodTypeAny> {
 }
 
 /**
- * Fetches all videos from NocoDB with automatic pagination.
- *
- * The function first requests the initial page to determine the total
- * number of records. It then creates a list of remaining pages and fetches
- * them in small batches to avoid overloading the API. The `concurrency`
- * setting controls how many page requests are executed in parallel.
- *
- * @template T - The schema type for video items (defaults to videoSchema)
- * @param options - Configuration options for the request
- * @returns Array of all video records
- * @throws Error if any request fails or response validation fails
+ * Simple navigation data fetcher for debugging - gets adjacent videos by ID
+ * This is a fallback function that uses a simpler approach
  */
+export async function getSimpleNavigationData(
+  currentVideoId: string,
+  sort: string = '-CreatedAt',
+): Promise<{
+  previousVideoData: { Id: string; Title: string | null } | null;
+  nextVideoData: { Id: string; Title: string | null } | null;
+}> {
+  const config = getNocoDBConfig();
+
+  try {
+    // Get a small batch of videos to find navigation
+    const response = await apiClient.get(
+      `${config.url}/api/v2/tables/${encodeURIComponent(config.tableId)}/records`,
+      {
+        headers: { 'xc-token': config.token },
+        params: {
+          fields: 'Id,VideoID,Title',
+          sort: sort,
+          limit: 50, // Small batch for faster loading
+        },
+      }
+    );
+
+    const records = response.data?.list || [];
+
+    // Find current video position
+    const currentIndex = records.findIndex((record: any) => record.VideoID === currentVideoId);
+
+    if (currentIndex === -1) {
+      return { previousVideoData: null, nextVideoData: null };
+    }
+
+    let previousVideoData: { Id: string; Title: string | null } | null = null;
+    let nextVideoData: { Id: string; Title: string | null } | null = null;
+
+    // Get previous video
+    if (currentIndex > 0) {
+      previousVideoData = {
+        Id: records[currentIndex - 1].VideoID,
+        Title: records[currentIndex - 1].Title || null
+      };
+    }
+
+    // Get next video
+    if (currentIndex < records.length - 1) {
+      nextVideoData = {
+        Id: records[currentIndex + 1].VideoID,
+        Title: records[currentIndex + 1].Title || null
+      };
+    }
+
+    return { previousVideoData, nextVideoData };
+
+  } catch (error) {
+    console.error('Simple navigation failed:', error);
+    return { previousVideoData: null, nextVideoData: null };
+  }
+}
+export async function getVideoNavigationData(
+  currentVideoId: string,
+  sort: string = '-CreatedAt',
+): Promise<{
+  previousVideoData: { Id: string; Title: string | null } | null;
+  nextVideoData: { Id: string; Title: string | null } | null;
+}> {
+  const config = getNocoDBConfig();
+
+  // Create a cache key for this navigation request
+  const cacheKey = `nav_${currentVideoId}_${sort}`;
+
+  // Check cache first with a reasonable TTL (5 minutes)
+  const cached = getFromCache<{
+    previousVideoData: { Id: string; Title: string | null } | null;
+    nextVideoData: { Id: string; Title: string | null } | null;
+    timestamp: number;
+  }>(cacheKey);
+
+  // Return cached data if it's less than 5 minutes old
+  if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+    return {
+      previousVideoData: cached.previousVideoData,
+      nextVideoData: cached.nextVideoData
+    };
+  }
+
+  try {
+    // First, find the current video to get its full data
+    const currentVideoResponse = await apiClient.get(
+      `${config.url}/api/v2/tables/${encodeURIComponent(config.tableId)}/records`,
+      {
+        headers: { 'xc-token': config.token },
+        params: {
+          where: `(VideoID,eq,${JSON.stringify(currentVideoId)})`,
+          fields: 'Id,VideoID,Title',
+          limit: 1,
+        },
+      }
+    );
+
+    const currentRecords = currentVideoResponse.data?.list || [];
+    if (!Array.isArray(currentRecords) || currentRecords.length === 0) {
+      void logDevError('getVideoNavigationData: current video not found', { currentVideoId });
+      const emptyResult = { previousVideoData: null, nextVideoData: null };
+      setInCache(cacheKey, { ...emptyResult, timestamp: Date.now() });
+      return emptyResult;
+    }
+
+    const currentVideo = currentRecords[0];
+    const currentId = currentVideo.Id;
+
+    void logDevEvent({
+      message: 'getVideoNavigationData: found current video',
+      payload: { currentVideoId, currentId, sort }
+    });
+
+    // Get a larger set of videos to find proper navigation
+    // We'll get enough to ensure we have previous/next in the sorted order
+    const navigationResponse = await apiClient.get(
+      `${config.url}/api/v2/tables/${encodeURIComponent(config.tableId)}/records`,
+      {
+        headers: { 'xc-token': config.token },
+        params: {
+          fields: 'Id,VideoID,Title',
+          sort: sort,
+          limit: 1000, // Get a reasonable chunk to find navigation
+        },
+      }
+    );
+
+    const allRecords = navigationResponse.data?.list || [];
+
+    void logDevEvent({
+      message: 'getVideoNavigationData: fetched records',
+      payload: { totalRecords: allRecords.length, sort }
+    });
+
+    // Find the current video's position in the sorted list
+    const currentIndex = allRecords.findIndex(video => video.Id === currentId);
+
+    if (currentIndex === -1) {
+      void logDevError('getVideoNavigationData: current video not found in sorted list', {
+        currentVideoId,
+        currentId,
+        allRecordsCount: allRecords.length
+      });
+      const emptyResult = { previousVideoData: null, nextVideoData: null };
+      setInCache(cacheKey, { ...emptyResult, timestamp: Date.now() });
+      return emptyResult;
+    }
+
+    let previousVideoData: { Id: string; Title: string | null } | null = null;
+    let nextVideoData: { Id: string; Title: string | null } | null = null;
+
+    // Get the previous video (if not at the beginning)
+    if (currentIndex > 0) {
+      previousVideoData = {
+        Id: allRecords[currentIndex - 1].VideoID,
+        Title: allRecords[currentIndex - 1].Title || null
+      };
+    }
+
+    // Get the next video (if not at the end)
+    if (currentIndex < allRecords.length - 1) {
+      nextVideoData = {
+        Id: allRecords[currentIndex + 1].VideoID,
+        Title: allRecords[currentIndex + 1].Title || null
+      };
+    }
+
+    const result = { previousVideoData, nextVideoData };
+
+    void logDevEvent({
+      message: 'getVideoNavigationData: navigation result',
+      payload: {
+        currentVideoId,
+        currentIndex,
+        hasPrevious: previousVideoData !== null,
+        hasNext: nextVideoData !== null,
+        previousTitle: previousVideoData?.Title,
+        nextTitle: nextVideoData?.Title
+      }
+    });
+
+    // Cache the result with timestamp
+    setInCache(cacheKey, { ...result, timestamp: Date.now() });
+
+    return result;
+
+  } catch (error) {
+    void logDevError('getVideoNavigationData: failed to fetch navigation data', {
+      currentVideoId,
+      sort,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    const emptyResult = { previousVideoData: null, nextVideoData: null };
+    setInCache(cacheKey, { ...emptyResult, timestamp: Date.now() });
+    return emptyResult;
+  }
+}
 export async function fetchAllVideos<T extends z.ZodType = typeof videoSchema>(
   options?: FetchAllVideosOptions<T>
 ): Promise<z.infer<T>[]> {

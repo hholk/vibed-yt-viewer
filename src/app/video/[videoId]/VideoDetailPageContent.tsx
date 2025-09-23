@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense, lazy, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy, Trash2, XCircle } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
 import type { Video, VideoListItem } from '@/features/videos/api/nocodb';
 import { updateVideoSimple, deleteVideo } from '@/features/videos/api/nocodb';
 import { StarRating } from '@/features/videos/components';
@@ -60,9 +59,16 @@ const cleanMarkdownContent = (content: string): string => {
     .trim();
 };
 
+// Lazy load markdown component for better performance
+const LazyReactMarkdown = lazy(() => import('react-markdown'));
+
 const SafeReactMarkdown = ({ children }: SafeReactMarkdownProps) => {
   const cleanedContent = cleanMarkdownContent(children);
-  return <ReactMarkdown>{cleanedContent}</ReactMarkdown>;
+  return (
+    <Suspense fallback={<div className="text-neutral-400">Loading content...</div>}>
+      <LazyReactMarkdown>{cleanedContent}</LazyReactMarkdown>
+    </Suspense>
+  );
 };
 
 type FieldValue = string | number | boolean | Date | string[] | Record<string, unknown> | Record<string, unknown>[] | null | undefined;
@@ -462,6 +468,32 @@ export function VideoDetailPageContent({
     }
   }, [previousVideo, nextVideo, router, searchParams]);
 
+  // Add keyboard navigation support
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // Only handle if no input/textarea is focused
+      if (event.target instanceof HTMLInputElement ||
+          event.target instanceof HTMLTextAreaElement ||
+          (event.target as HTMLElement)?.contentEditable === 'true') {
+        return;
+      }
+
+      switch (event.key) {
+        case 'ArrowLeft':
+          event.preventDefault();
+          navigateToVideo('prev');
+          break;
+        case 'ArrowRight':
+          event.preventDefault();
+          navigateToVideo('next');
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, [navigateToVideo, previousVideo, nextVideo]);
+
   const handleSaveComment = async () => {
     if (!currentVideo?.Id) {
       setSaveError('No video selected');
@@ -677,6 +709,54 @@ export function VideoDetailPageContent({
     isLink: false
   } : null;
 
+  // Memoize expensive field processing to prevent unnecessary re-renders
+  const processedFields = useMemo(() => {
+    if (!currentVideo) return [];
+
+    return fieldOrder.map((fieldKey: keyof Video) => {
+      let value = currentVideo[fieldKey];
+      const label = formatFieldName(String(fieldKey));
+
+      // Guard: if value is an empty object, set to null
+      if (typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length === 0 && value.constructor === Object) {
+        value = null;
+      }
+
+      if (value === null || value === undefined || 
+         (typeof value === 'string' && value.trim() === '') ||
+         (Array.isArray(value) && value.length === 0)
+      ) {
+        return null; 
+      }
+
+      let isInitiallyCollapsed = true;
+      const initiallyExpandedFields = ['ThumbHigh', 'URL', 'ActionableAdvice', 'TLDR', 'MainSummary'];
+      if (initiallyExpandedFields.includes(String(fieldKey))) {
+        isInitiallyCollapsed = false;
+      }
+      
+      const isImg = fieldKey === 'ThumbHigh';
+      const isLnk = fieldKey === 'URL' || (fieldKey === 'RelatedURLs' && Array.isArray(value) && value.every(item => typeof item === 'string' && item.startsWith('http')));
+      const isMd = MARKDOWN_FIELDS.includes(String(fieldKey)) || fieldKey === 'Description' || fieldKey === 'Transcript' || (typeof value === 'string' && String(value).length > 100 && !isLnk && !isImg);
+
+      return (
+        <DetailItem
+          key={String(fieldKey)}
+          label={label}
+          value={value as FieldValue} 
+          isInitiallyCollapsed={isInitiallyCollapsed}
+          isMarkdown={isMd}
+          isImage={isImg}
+          isLink={isLnk}
+          draggable
+          onDragStart={handleDragStart(fieldKey)}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop(fieldKey)}
+        />
+      );
+    }).filter(Boolean); // Filter out null values
+  }, [fieldOrder, currentVideo, handleDragStart, handleDragOver, handleDrop]);
+
   
   if (!currentVideo) {
     return (
@@ -698,17 +778,25 @@ export function VideoDetailPageContent({
           </Link>
           <div className="flex space-x-2">
             <button
-              onClick={() => navigateToVideo('prev' as 'prev' | 'next')}
+              onClick={() => navigateToVideo('prev')}
               disabled={!previousVideo}
-              className="flex items-center px-4 py-2 bg-brand-secondary hover:bg-brand-secondary/80 text-white font-medium rounded-md shadow-sm transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand-secondary focus:ring-opacity-60"
+              className={`flex items-center px-4 py-2 font-medium rounded-md shadow-sm transition-all duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-opacity-60 ${
+                previousVideo
+                  ? 'bg-brand-secondary hover:bg-brand-secondary/80 text-white focus:ring-brand-secondary'
+                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
               title={previousVideo?.Title || 'No previous video'}
             >
               <ChevronLeft size={20} className="mr-1" /> Previous
             </button>
             <button
-              onClick={() => navigateToVideo('next' as 'prev' | 'next')}
+              onClick={() => navigateToVideo('next')}
               disabled={!nextVideo}
-              className="flex items-center px-4 py-2 bg-brand-secondary hover:bg-brand-secondary/80 text-white font-medium rounded-md shadow-sm transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand-secondary focus:ring-opacity-60"
+              className={`flex items-center px-4 py-2 font-medium rounded-md shadow-sm transition-all duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-opacity-60 ${
+                nextVideo
+                  ? 'bg-brand-secondary hover:bg-brand-secondary/80 text-white focus:ring-brand-secondary'
+                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
               title={nextVideo?.Title || 'No next video'}
             >
               Next <ChevronRight size={20} className="ml-1" />
@@ -717,6 +805,7 @@ export function VideoDetailPageContent({
         </div>
 
         {}
+
         <h1 className="text-3xl font-semibold mb-4 text-neutral-100 break-words hyphens-auto" title={currentVideo.Title || 'Video Title'}>
           {currentVideo.Title || 'Untitled Video'}
         </h1>
@@ -730,56 +819,10 @@ export function VideoDetailPageContent({
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {}
+          {/* Main content area with memoized field processing */}
           <div className="md:col-span-2 space-y-4">
-            {fieldOrder.map((fieldKey: keyof Video) => {
-               let value = currentVideo[fieldKey];
-               const label = formatFieldName(String(fieldKey));
-
-               // Guard: if value is an empty object, set to null
-               // This check is done immediately after value assignment to prevent passing empty objects to DetailItem
-               if (typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length === 0 && value.constructor === Object) {
-                 value = null;
-               }
-
-               if (value === null || value === undefined || 
-                  (typeof value === 'string' && value.trim() === '') ||
-                  (Array.isArray(value) && value.length === 0)
-               ) {
-                 return null; 
-               }
-
-               let isInitiallyCollapsed = true;
-              const initiallyExpandedFields = ['ThumbHigh', 'URL', 'ActionableAdvice', 'TLDR', 'MainSummary'];
-              if (initiallyExpandedFields.includes(String(fieldKey))) {
-                isInitiallyCollapsed = false;
-              }
-              
-              const isImg = fieldKey === 'ThumbHigh';
-              const isLnk = fieldKey === 'URL' || (fieldKey === 'RelatedURLs' && Array.isArray(value) && value.every(item => typeof item === 'string' && item.startsWith('http')));
-              const isMd = MARKDOWN_FIELDS.includes(String(fieldKey)) || fieldKey === 'Description' || fieldKey === 'Transcript' || (typeof value === 'string' && String(value).length > 100 && !isLnk && !isImg);
-
-              // type assertion: all runtime guards in place
-              // This assertion is done to ensure that value is of type FieldValue when passed to DetailItem
-              return (
-                <DetailItem
-                  key={String(fieldKey)}
-                  label={label}
-                  value={value as FieldValue} 
-                  isInitiallyCollapsed={isInitiallyCollapsed}
-                  isMarkdown={isMd}
-                  isImage={isImg}
-                  isLink={isLnk}
-                  draggable
-                  onDragStart={handleDragStart(fieldKey)}
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop(fieldKey)}
-                />
-              );
-            })}
-            {}
-            {}
-          </div>
+            {processedFields}
+          </div>  
 
           {/* Right sidebar */}
           <div className="md:col-span-1 space-y-6">

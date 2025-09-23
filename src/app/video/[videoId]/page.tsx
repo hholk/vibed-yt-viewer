@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { fetchVideoByVideoId, fetchAllVideos } from '@/features/videos/api/nocodb';
+import { fetchVideoByVideoId, getVideoNavigationData, getSimpleNavigationData } from '@/features/videos/api/nocodb';
 import { notFound } from 'next/navigation';
 import { VideoDetailPageContent } from './VideoDetailPageContent';
 
@@ -52,45 +52,31 @@ export default async function VideoDetailPage({
     : searchParams.sort;
   const currentSort = sortParam || '-CreatedAt';
 
-  // Then fetch the list that depends on the sort order
-  // Note: 'video' will be defined here due to the notFound() check above.
-  const allVideoListItems = await fetchAllVideos({
-    sort: currentSort,
-    fields: ['Id', 'rowId', 'VideoID', 'Title'],
-  });
-
-  // The if (!video) check was here, but it's now redundant as it's performed earlier.
-  
-  const validVideoListItems = Array.isArray(allVideoListItems) ? allVideoListItems : [];
-
-  
-  
-  
-  const currentVideoIndexInList = validVideoListItems.findIndex(item => item.VideoID === video.VideoID);
-
+  // Optimize: Get minimal navigation data without fetching all videos
   let previousVideoData: { Id: string; Title: string | null } | null = null;
   let nextVideoData: { Id: string; Title: string | null } | null = null;
 
-  if (currentVideoIndexInList !== -1) {
-    const prevItem = currentVideoIndexInList > 0 ? validVideoListItems[currentVideoIndexInList - 1] : null;
-    const nextItem = currentVideoIndexInList < validVideoListItems.length - 1 ? validVideoListItems[currentVideoIndexInList + 1] : null;
+  try {
+    // Try the optimized navigation function first
+    const navData = await getVideoNavigationData(video.VideoID || '', currentSort);
+    previousVideoData = navData.previousVideoData;
+    nextVideoData = navData.nextVideoData;
 
-    if (prevItem?.VideoID) {
-      previousVideoData = { Id: prevItem.VideoID, Title: prevItem.Title || null };
-      
-      fetchVideoByVideoId(prevItem.VideoID); 
+    // If that fails, try the simple fallback
+    if (!previousVideoData && !nextVideoData) {
+      console.log('Navigation optimization failed, trying fallback...');
+      const fallbackNavData = await getSimpleNavigationData(video.VideoID || '', currentSort);
+      previousVideoData = fallbackNavData.previousVideoData;
+      nextVideoData = fallbackNavData.nextVideoData;
     }
-    if (nextItem?.VideoID) {
-      nextVideoData = { Id: nextItem.VideoID, Title: nextItem.Title || null };
-      
-      fetchVideoByVideoId(nextItem.VideoID);
-    }
+  } catch {
+    // Continue without navigation data if there's an error
   }
 
   return (
-    <VideoDetailPageContent 
-      video={video} 
-      allVideos={validVideoListItems} 
+    <VideoDetailPageContent
+      video={video}
+      allVideos={[]}
       previousVideo={previousVideoData}
       nextVideo={nextVideoData}
     />
