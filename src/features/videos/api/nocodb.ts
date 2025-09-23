@@ -1027,7 +1027,7 @@ export async function updateVideoSimple(
           'Content-Type': 'application/json',
         },
         params: {
-          where: `(VideoID,eq,${JSON.stringify(recordIdOrVideoId)})`,
+          where: `(VideoID,eq,${recordIdOrVideoId})`,
           fields: 'Id',
           limit: 1,
         },
@@ -1177,6 +1177,7 @@ export async function deleteVideo(
           'Content-Type': 'application/json',
         },
         data: {
+          Id: identifiers.numericId,
           filter: `(Id,eq,${identifiers.numericId})`,
         },
       }),
@@ -1917,7 +1918,7 @@ export async function getVideoNavigationData(
       {
         headers: { 'xc-token': config.token },
         params: {
-          where: `(VideoID,eq,${JSON.stringify(currentVideoId)})`,
+          where: `(VideoID,eq,${currentVideoId})`,
           fields: 'Id,VideoID,Title',
           limit: 1,
         },

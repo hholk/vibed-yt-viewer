@@ -325,14 +325,14 @@ export function VideoDetailPageContent({
 
   // Handler to clear DetailedNarrativeFlow
   const handleClearNarrative = async () => {
-    if (!currentVideo?.Id) return;
+    if (!currentVideo?.VideoID) return;
     setIsSaving(true);
     setSaveError(null);
     try {
-      const response = await fetch(`/api/videos/${currentVideo.Id}`, {
+      const response = await fetch(`/api/videos/${currentVideo.VideoID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoId: currentVideo.Id, data: { DetailedNarrativeFlow: null } })
+        body: JSON.stringify({ videoId: currentVideo.VideoID, data: { DetailedNarrativeFlow: null } })
       });
       const result = await response.json();
       if (result.success) {
@@ -350,14 +350,14 @@ export function VideoDetailPageContent({
   };
 
   const handleDeleteVideo = async () => {
-    if (!currentVideo?.Id) return;
+    if (!currentVideo?.VideoID) return;
     if (!window.confirm('Delete this video entry? This action cannot be undone.')) {
       return;
     }
     setIsDeleting(true);
     setSaveError(null);
     try {
-      const response = await fetch(`/api/videos/${currentVideo.Id}?videoId=${currentVideo.Id}`, {
+      const response = await fetch(`/api/videos/${currentVideo.VideoID}?videoId=${currentVideo.VideoID}`, {
         method: 'DELETE'
       });
       const result = await response.json();
@@ -449,7 +449,7 @@ export function VideoDetailPageContent({
   }, [navigateToVideo, previousVideo, nextVideo]);
 
   const handleSaveComment = async () => {
-    if (!currentVideo?.Id) {
+    if (!currentVideo?.VideoID) {
       setSaveError('No video selected');
       return;
     }
@@ -457,10 +457,10 @@ export function VideoDetailPageContent({
     setSaveError(null);
     try {
       const updatedFields = { PersonalComment: personalComment };
-      const response = await fetch(`/api/videos/${currentVideo.Id}`, {
+      const response = await fetch(`/api/videos/${currentVideo.VideoID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoId: currentVideo.Id, data: updatedFields })
+        body: JSON.stringify({ videoId: currentVideo.VideoID, data: updatedFields })
       });
       const result = await response.json();
       if (result.success) {
@@ -491,7 +491,7 @@ export function VideoDetailPageContent({
   };
 
   const handleRatingChange = async (newRating: number | null, field: keyof Video) => {
-    if (!currentVideo?.Id) {
+    if (!currentVideo?.VideoID) {
       setSaveError('No video selected');
       return;
     }
@@ -505,10 +505,10 @@ export function VideoDetailPageContent({
     try {
       const updatedFields = { [field]: newRating };
       // Use the simplified update function for better reliability
-      const response = await fetch(`/api/videos/${currentVideo.Id}`, {
+      const response = await fetch(`/api/videos/${currentVideo.VideoID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoId: currentVideo.Id, data: updatedFields })
+        body: JSON.stringify({ videoId: currentVideo.VideoID, data: updatedFields })
       });
       const result = await response.json();
       if (result.success) {
