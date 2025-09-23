@@ -2,14 +2,16 @@ import { fetchVideos, type VideoListItem, videoListItemSchema, type PageInfo } f
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Terminal } from 'lucide-react';
 import { VideoListClient } from '@/features/videos/components';
+import { SearchComponent } from '@/shared/components/search-component';
 
 export default async function HomePage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ sort?: string; [key: string]: string | string[] | undefined }> }) {
   let videos: VideoListItem[] = [];
   let error: string | null = null;
   let pageInfo: PageInfo | null = null;
+  let resolvedSearchParams: { sort?: string; [key: string]: string | string[] | undefined } | null = null;
 
   try {
-    const resolvedSearchParams = await searchParamsPromise;
+    resolvedSearchParams = await searchParamsPromise;
     const sortParam = resolvedSearchParams.sort;
     const currentSort = typeof sortParam === 'string' ? sortParam : '-CreatedAt';
 
@@ -42,6 +44,7 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
         'SentimentReason',
         'TechnicalTerms',
         'Speaker',
+        'CreatedAt',
       ],
       schema: videoListItemSchema,
     });
@@ -89,13 +92,25 @@ export default async function HomePage({ searchParams: searchParamsPromise }: { 
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="mb-6 text-3xl font-bold font-mono text-brand">Video Collection</h1>
-      <VideoListClient
-        videos={videos}
-        pageInfo={pageInfo}
-        initialSort={typeof searchParamsPromise.then ? undefined : (await searchParamsPromise).sort || '-CreatedAt'}
-      />
+    <div className="container mx-auto p-4 space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold font-mono text-brand">Video Collection</h1>
+        <div className="text-sm text-muted-foreground">
+          {pageInfo?.totalRows || 0} total videos
+        </div>
+      </div>
+
+      {/* Search Component */}
+      <SearchComponent initialVideos={videos} />
+
+      {/* Original Video List (shown when no search is active) */}
+      <div id="video-list-section" className="hidden">
+        <VideoListClient
+          videos={videos}
+          pageInfo={pageInfo}
+          initialSort={resolvedSearchParams?.sort || '-CreatedAt'}
+        />
+      </div>
     </div>
   );
 }

@@ -489,6 +489,7 @@ export const videoListItemSchema = z.object({
   TechnicalTerms: z.preprocess(preprocessors.stringToArrayOrNull, z.array(z.string()).nullable().default([]).optional()),
   Speaker: z.string().optional().nullable(),
   VideoID: z.string().nullable(),
+  CreatedAt: z.coerce.date().optional().nullable().default(null),
 }).describe('videoListItemSchema_grid');
 export type VideoListItem = z.infer<typeof videoListItemSchema>;
 

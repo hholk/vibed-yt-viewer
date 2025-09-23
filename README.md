@@ -4,13 +4,11 @@ A modern, responsive web application for browsing, searching, and interacting wi
 
 ## 🚀 Features
 
-- **Video Gallery**: Browse videos in a responsive grid layout
-- **Detailed Video View**: View comprehensive video details including transcripts, summaries, and metadata
-- **Interactive Rating**: Rate videos using a 5-star rating system
-- **Personal Notes**: Add and edit personal comments for each video
-- **Markdown Table Rendering**: Automatic detection and beautiful rendering of markdown tables in video descriptions and summaries with responsive design
-- **Responsive Design**: Works on desktop and mobile devices
-- **Type Safety**: Built with TypeScript for better developer experience
+- **Advanced Search**: Powerful macOS Finder-like search with tag-based interface that searches across the entire database
+  - Search across multiple fields simultaneously (Title, Description, Tags, Persons, Companies, etc.)
+  - Tag-based search interface similar to macOS Finder
+  - Category-based filtering with visual icons
+  - Real-time search across the complete video database
 - **Code Optimization**: The NocoDB client has been extensively refactored to eliminate code duplication and improve maintainability:
   - **Schema Preprocessing**: Created reusable preprocessing utilities (`preprocessors` object) to reduce schema definition code by ~70%
   - **API Function Consolidation**: Unified duplicate fetch functions into a single `fetchSingleVideo` function with consistent behavior
@@ -19,16 +17,65 @@ A modern, responsive web application for browsing, searching, and interacting wi
   - **Cache Management**: Fixed cache duplication issues and improved cache key consistency
   - All optimizations maintain backward compatibility while significantly improving code quality and performance
 
-## 🛠️ Tech Stack
+## 🔍 Advanced Search System
 
-- **Framework**: Next.js 15 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **UI Components**: shadcn/ui
-- **Data Validation**: Zod
-- **API Client**: Axios
-- **Testing**: Vitest, React Testing Library
-- **Linting**: ESLint
+The application features a powerful search system inspired by macOS Finder that allows users to search across the entire video database using a tag-based interface.
+
+### Features
+
+- **Database-Wide Search**: Unlike the previous client-side filtering, the new search queries the entire database directly
+- **Tag-Based Interface**: Every search term becomes a visual tag that can be easily managed
+- **Category-Based Filtering**: Search within specific categories like Title, Description, Tags, Persons, Companies, etc.
+- **Real-Time Results**: Search results update as you type or modify search tags
+- **Visual Category Indicators**: Each category has a distinctive icon for easy recognition
+
+### Search Categories
+
+The search system supports the following categories:
+
+- 📝 **Title**: Video titles
+- 📄 **Description**: Video descriptions
+- 📺 **Channel**: Channel names
+- 🎤 **Speaker**: Speaker names
+- 🎭 **Genre**: Video genres
+- 🏷️ **Topic**: Main topics
+- # **Hashtag**: Video hashtags
+- 👤 **Person**: People mentioned
+- 🏢 **Company**: Companies mentioned
+- 📊 **Indicator**: Key indicators
+- 📈 **Trend**: Trends discussed
+- 💰 **Asset**: Investable assets
+- 🏛️ **Institution**: Institutions mentioned
+- 📅 **Event**: Events and fairs
+- 🔗 **DOI**: Digital Object Identifiers
+- 📚 **Source**: Primary sources
+- ⚙️ **Technical**: Technical terms
+- 📊 **Ticker**: Stock ticker symbols
+
+### Usage
+
+1. **Basic Search**: Type in the search box and press Enter to add a search tag
+2. **Category Selection**: Click the tag icon to select specific categories to search in
+3. **Multiple Tags**: Add multiple search terms as separate tags
+4. **Tag Management**: Click the X on any tag to remove it
+5. **Clear All**: Use the "Clear all" button to remove all search tags
+
+### Technical Implementation
+
+- **API Endpoint**: `/api/search` handles all search requests
+- **Database Query**: Uses NocoDB's filtering capabilities to search across all records
+- **Performance**: Optimized to handle large datasets with efficient pagination
+- **Caching**: Results are cached to improve performance for repeated searches
+
+### Example Searches
+
+- Search for "machine learning" in titles and descriptions
+- Find videos mentioning "John Doe" as a person
+- Look for content tagged with "#artificial-intelligence"
+- Search for videos from "TechCrunch" channel
+- Find videos discussing "quantum computing" as a technical term
+
+The search system provides a modern, intuitive interface that makes finding specific content in large video collections effortless.
 ## Architecture Overview
 
 The app uses Next.js 15 with the App Router and React Server Components. Data comes from a NocoDB backend accessed via an Axios-based client. Zod is used for robust schema validation and data transformation, including parsing comma-separated strings from NocoDB into individual tags. Tailwind CSS and shadcn/ui provide the UI layer. See the project structure below for folder layout.
