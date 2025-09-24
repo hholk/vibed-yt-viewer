@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchVideos, videoListItemSchema } from "@/features/videos/api/nocodb";
+import { fetchVideos, videoListItemSchema } from '@/features/videos/api/nocodb';
+
+/**
+ * This route acts as a tiny proxy between the client and the data layer. It keeps
+ * query parsing in one place and relies on the shared fetcher so the same
+ * validation rules apply in API routes and server components alike.
+ */
 
 export async function GET(request: NextRequest) {
   try {
@@ -7,8 +13,6 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '35');
     const sort = searchParams.get('sort') || '-CreatedAt';
-
-    console.log('🎯 API request received:', { page, limit, sort });
 
     // Fetch the requested page of videos
     const result = await fetchVideos({
@@ -44,17 +48,6 @@ export async function GET(request: NextRequest) {
       schema: videoListItemSchema,
     });
 
-    console.log('📦 API result from NocoDB:', {
-      videosCount: result.videos.length,
-      pageInfo: result.pageInfo,
-      hasNextPage: result.pageInfo.hasNextPage,
-      totalRows: result.pageInfo.totalRows
-    });
-
-    if (result.videos.length === 0) {
-      console.log('⚠️ No videos returned from NocoDB');
-    }
-
     const response = {
       videos: result.videos,
       pageInfo: {
@@ -62,17 +55,9 @@ export async function GET(request: NextRequest) {
         hasNextPage: !result.pageInfo.isLastPage,
       },
       success: true,
-      debug: {
-        requestedPage: page,
-        requestedLimit: limit,
-        actualVideosReturned: result.videos.length
-      }
     };
-
-    console.log('📤 Sending response:', response.debug);
     return NextResponse.json(response);
   } catch (error) {
-    console.error('💥 API error:', error);
     return NextResponse.json(
       {
         error: 'Failed to fetch videos',

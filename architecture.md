@@ -70,13 +70,13 @@ sequenceDiagram
 
 ## Key Modules
 
-- `src/features/videos/api/nocodb.ts`
-  - `getNocoDBConfig()` reads `NC_URL`, `NC_TOKEN`, `NOCODB_PROJECT_ID`, `NOCODB_TABLE_ID`; `NOCODB_TABLE_NAME` is optional and used for diagnostics.
-  - `resolveTableIdentifiers()` normalises the v2 table id via `/api/v2/meta/projects/{projectId}/tables` and `/api/v2/tables/{tableId}` per the NocoDB docs.
-  - `fetchVideos()` with pagination, sort, optional `fields`, and tag search via `where` (ilike on `Hashtags`).
-  - `fetchVideoByVideoId()` with `(VideoID,eq,<videoId>)`.
-  - `updateVideo()`/`deleteVideo()` with automatic numeric Id resolution.
-  - Zod schemas (`videoSchema`, `videoListItemSchema`) + preprocessors for robust parsing.
+- `src/features/videos/api/`
+  - `config.ts` resolves the environment configuration and keeps overrides consistent.
+  - `table-metadata.ts` normalises table identifiers and caches metadata lookups.
+  - `schemas.ts` defines the Zod contracts for list and detail views.
+  - `video-service.ts` exposes `fetchVideos`, `fetchAllVideos`, and navigation helpers.
+  - `record-utils.ts` centralises caching of single records and identifier lookups.
+  - `mutations.ts` contains the update and delete flows with shared normalisers.
 
 - `src/features/videos/components/`
   - Grid/list rendering, `StarRating`, and detail page client view.

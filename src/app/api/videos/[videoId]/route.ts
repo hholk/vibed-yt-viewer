@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateVideoSimple, deleteVideo } from "@/features/videos/api/nocodb";
+import { updateVideo, deleteVideo } from '@/features/videos/api/nocodb';
+
+/**
+ * API handlers in Next.js are simple async functions. We keep the logic tiny here
+ * and delegate the heavy lifting to the NocoDB service layer so beginners can
+ * trace the flow easily: validate input → call the service → return JSON.
+ */
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -10,27 +16,26 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'Missing required fields: videoId and data',
-          success: false
+          success: false,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const updatedVideo = await updateVideoSimple(videoId, data);
+    const updatedVideo = await updateVideo(videoId, data);
 
     return NextResponse.json({
       success: true,
-      video: updatedVideo
+      video: updatedVideo,
     });
   } catch (error) {
-    console.error('Video update error:', error);
     return NextResponse.json(
       {
         error: 'Failed to update video',
         success: false,
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -57,7 +62,6 @@ export async function DELETE(request: NextRequest) {
       message: 'Video deleted successfully'
     });
   } catch (error) {
-    console.error('Video delete error:', error);
     return NextResponse.json(
       {
         error: 'Failed to delete video',

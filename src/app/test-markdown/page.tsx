@@ -22,30 +22,23 @@ And here's another paragraph after the table.`;
 
   // Custom components for react-markdown
   const markdownComponents = {
-    table: ({ children, ...props }: any) => {
-      console.log('Table component called with children:', children);
-      console.log('Table props:', props);
+    table: ({ children, ...props }: React.HTMLAttributes<HTMLTableElement> & { children: React.ReactNode }) => {
+      const tableContent = React.Children.toArray(children)
+        .map((child) => (typeof child === 'string' ? child : ''))
+        .join('');
 
-      // Check if the table content contains our specific markdown table format
-      const tableContent = React.Children.toArray(children).join('');
-      console.log('Table content detected:', tableContent);
-
-      // More robust table detection - look for markdown table patterns
       const hasTableSyntax = tableContent.includes('|') && (
-        tableContent.includes('---') || // Standard markdown separator
-        tableContent.includes('-|-') || // Alternative separator format
-        tableContent.includes(':---') || // Left-aligned columns
-        tableContent.includes('---:') || // Right-aligned columns
-        tableContent.includes(':---:')   // Center-aligned columns
+        tableContent.includes('---') ||
+        tableContent.includes('-|-') ||
+        tableContent.includes(':---') ||
+        tableContent.includes('---:') ||
+        tableContent.includes(':---:')
       );
 
       if (hasTableSyntax) {
-        console.log('Using MarkdownTable component for:', testContent);
         return <MarkdownTable content={testContent} />;
       }
 
-      // Fall back to default table rendering for other tables
-      console.log('Using default table rendering');
       return <table {...props}>{children}</table>;
     },
   };
