@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchAllVideos, videoListItemSchema, type VideoListItem } from "@/features/videos/api/nocodb";
+import { fetchAllVideos, videoListItemSchema, type VideoListItem } from '@/features/videos/api/nocodb';
+
+/**
+ * The search endpoint performs in-memory filtering. For small datasets this keeps
+ * the code approachable: load the curated dataset, filter by the requested fields,
+ * and respond with a paginated slice.
+ */
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,8 +15,6 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '35');
     const offset = parseInt(searchParams.get('offset') || '0');
     const sort = searchParams.get('sort') || '-CreatedAt';
-
-    console.log('🔍 Search API request:', { query, categories, limit, offset, sort });
 
     if (!query.trim()) {
       return NextResponse.json({
@@ -75,8 +79,6 @@ export async function GET(request: NextRequest) {
       ],
       schema: videoListItemSchema,
     });
-
-    console.log(`📊 Loaded ${allVideos.length} videos from database for search`);
 
     // Build search terms from query
     const searchTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 0);
@@ -146,8 +148,6 @@ export async function GET(request: NextRequest) {
 
     const paginatedVideos = sortedVideos.slice(offset, offset + limit);
 
-    console.log(`🎯 Search results: ${paginatedVideos.length} videos found for query "${query}" (offset: ${offset}, limit: ${limit})`);
-
     return NextResponse.json({
       videos: paginatedVideos,
       total: matchingVideos.length,
@@ -158,7 +158,6 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('💥 Search API error:', error);
     return NextResponse.json(
       {
         error: 'Failed to search videos',

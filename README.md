@@ -402,7 +402,9 @@ See `fetchVideos({ tagSearchQuery: 'word1 word2' })` which builds the filter as 
 
 ### Client functions
 
-The NocoDB client lives in `src/features/videos/api/nocodb.ts` and exposes:
+The public NocoDB client entry point is `src/features/videos/api/nocodb.ts`; it
+re-exports the functions implemented across the modular files in the same
+folder and exposes:
 
 - `fetchVideos(options)` – list videos with pagination, sort, optional `fields`, and optional `tagSearchQuery`.
 - `fetchAllVideos(options)` – pull the complete dataset using paginated v2 requests and cache the result.
@@ -446,7 +448,7 @@ We use Zod to strictly validate and normalize the data:
 - `videoSchema` – Full record for the detail page.
 - `videoListItemSchema` – Minimal record for the grid.
 
-Preprocessors in `src/features/videos/api/nocodb.ts` handle common NocoDB formats:
+Preprocessors in `src/features/videos/api/schemas.ts` handle common NocoDB formats:
 
 - `stringToArrayOrNullPreprocessor` – converts newline-separated strings to `string[]` and handles empty objects.
 - `stringToLinkedRecordArrayPreprocessor` – converts comma-separated text or mixed inputs into arrays of linked-record-like objects (with `Title` / `name`).

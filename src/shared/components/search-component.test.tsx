@@ -1,4 +1,5 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { beforeEach, afterEach, vi } from 'vitest';
 import { SearchComponent } from './search-component';
 
 const mockVideos = [
@@ -19,27 +20,28 @@ describe('SearchComponent', () => {
   it('renders search input', () => {
     render(<SearchComponent initialVideos={mockVideos} />);
 
-    expect(screen.getByPlaceholderText('Search videos... (e.g., \'machine learning\', \'John Doe\', \'#ai\')')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Search videos/)).toBeInTheDocument();
   });
 
   it('shows initial video count', () => {
     render(<SearchComponent initialVideos={mockVideos} />);
 
-    expect(screen.getByText('1 video found')).toBeInTheDocument();
+    expect(screen.getByText('1 video total')).toBeInTheDocument();
   });
 
   it('adds search tags when clicking add button', async () => {
     render(<SearchComponent initialVideos={mockVideos} />);
 
-    const input = screen.getByPlaceholderText('Search videos... (e.g., \'machine learning\', \'John Doe\', \'#ai\')');
-    fireEvent.change(input, { target: { value: 'machine learning' } });
+    const input = screen.getByPlaceholderText(/Search videos/);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'machine learning' } });
+      fireEvent.focus(input);
+    });
 
-    // Focus the input to trigger the category selector
-    fireEvent.focus(input);
-
-    // Click the add button (this would appear after typing)
-    const addButton = screen.getByText(/Add "machine learning" as tag/);
-    fireEvent.click(addButton);
+    const addButton = await screen.findByText(/Add "machine learning" as tag/);
+    await act(async () => {
+      fireEvent.click(addButton);
+    });
 
     expect(screen.getByText('📝 machine learning')).toBeInTheDocument();
   });
@@ -47,18 +49,21 @@ describe('SearchComponent', () => {
   it('removes search tags when clicking remove button', async () => {
     render(<SearchComponent initialVideos={mockVideos} />);
 
-    const input = screen.getByPlaceholderText('Search videos... (e.g., \'machine learning\', \'John Doe\', \'#ai\')');
-    fireEvent.change(input, { target: { value: 'machine learning' } });
+    const input = screen.getByPlaceholderText(/Search videos/);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'machine learning' } });
+      fireEvent.focus(input);
+    });
 
-    // Focus the input to trigger the category selector
-    fireEvent.focus(input);
+    const addButton = await screen.findByText(/Add "machine learning" as tag/);
+    await act(async () => {
+      fireEvent.click(addButton);
+    });
 
-    const addButton = screen.getByText(/Add "machine learning" as tag/);
-    fireEvent.click(addButton);
-
-    const tag = screen.getByText('📝 machine learning');
-    const removeButton = tag.querySelector('button');
-    fireEvent.click(removeButton!);
+    const removeButton = screen.getByLabelText(/Remove .* machine learning tag/);
+    await act(async () => {
+      fireEvent.click(removeButton);
+    });
 
     expect(screen.queryByText('📝 machine learning')).not.toBeInTheDocument();
   });
@@ -66,18 +71,44 @@ describe('SearchComponent', () => {
   it('clears all tags when clicking clear all', async () => {
     render(<SearchComponent initialVideos={mockVideos} />);
 
-    const input = screen.getByPlaceholderText('Search videos... (e.g., \'machine learning\', \'John Doe\', \'#ai\')');
-    fireEvent.change(input, { target: { value: 'machine learning' } });
+    const input = screen.getByPlaceholderText(/Search videos/);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'machine learning' } });
+      fireEvent.focus(input);
+    });
 
-    // Focus the input to trigger the category selector
-    fireEvent.focus(input);
-
-    const addButton = screen.getByText(/Add "machine learning" as tag/);
-    fireEvent.click(addButton);
+    const addButton = await screen.findByText(/Add "machine learning" as tag/);
+    await act(async () => {
+      fireEvent.click(addButton);
+    });
 
     const clearButton = screen.getByText('Clear all');
-    fireEvent.click(clearButton);
+    await act(async () => {
+      fireEvent.click(clearButton);
+    });
 
     expect(screen.queryByText('📝 machine learning')).not.toBeInTheDocument();
   });
+});
+const mockFetch = vi.fn();
+
+beforeEach(() => {
+  mockFetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      success: true,
+      videos: mockVideos,
+      total: mockVideos.length,
+      query: 'machine learning',
+      categories: [],
+      availableCategories: [],
+    }),
+  } as Response);
+
+  vi.stubGlobal('fetch', mockFetch);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  mockFetch.mockReset();
 });

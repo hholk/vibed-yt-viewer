@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState, useCallback, useEffect, useRef } from "react";
-import { SortDropdown } from "./sort-dropdown";
-import { VideoCard } from "./video-card";
-import { Badge } from "@/shared/components/ui/badge";
-import type { VideoListItem } from "@/features/videos/api/nocodb";
-import { X, Loader2 } from "lucide-react";
-import type { PageInfo } from "@/features/videos/api/nocodb";
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import { SortDropdown } from './sort-dropdown';
+import { VideoCard } from './video-card';
+import { Badge } from '@/shared/components/ui/badge';
+import type { VideoListItem, PageInfo } from '@/features/videos/api/nocodb';
+import { X, Loader2 } from 'lucide-react';
 
 /**
  * Utility functions for extracting filterable data from videos
@@ -138,10 +137,8 @@ export function VideoListClient({ videos, pageInfo, initialSort }: VideoListClie
 
   // Auto-trigger loading if we detect there are more pages available
   useEffect(() => {
-    if (mightHaveMorePages && !isLoadingRef.current && allVideos.length > 0) {
-      console.log('Auto-triggering load more due to detected additional pages');
-      // Don't auto-load immediately, let user scroll first
-    }
+    // The effect intentionally stays empty so it can serve as a placeholder for future
+    // auto-loading strategies. Leaving it here documents that we considered the UX.
   }, [mightHaveMorePages, allVideos.length]);
 
   // Generate all available filter options
@@ -196,18 +193,11 @@ export function VideoListClient({ videos, pageInfo, initialSort }: VideoListClie
   };
 
   const loadMoreVideos = useCallback(async () => {
+    // The client loads additional pages lazily; wrapping it in useCallback avoids
+    // re-creating the function on every render and keeps the scroll listener stable.
     if (isLoadingRef.current) {
-      console.log('Load more already in progress, skipping');
       return;
     }
-
-    console.log('🚀 Starting load more videos, current state:', {
-      currentPage,
-      hasNextPage,
-      totalRows,
-      loadedVideos: allVideos.length,
-      isLoading: isLoadingRef.current
-    });
 
     isLoadingRef.current = true;
 
@@ -215,39 +205,25 @@ export function VideoListClient({ videos, pageInfo, initialSort }: VideoListClie
       const response = await fetch(`/api/videos?page=${currentPage}&limit=25&sort=${initialSort || '-CreatedAt'}`);
       const data = await response.json();
 
-      console.log('📡 API Response received:', {
-        success: data.success,
-        videosCount: data.videos?.length || 0,
-        pageInfo: data.pageInfo,
-        error: data.error
-      });
-
       if (data.success && data.videos && data.videos.length > 0) {
-        console.log('✅ Adding videos to state');
         setAllVideos(prev => {
           const newVideos = [...prev, ...data.videos];
-          console.log(`📈 Updated videos count: ${prev.length} -> ${newVideos.length}`);
           return newVideos;
         });
         setCurrentPage(prev => {
-          const newPage = prev + 1;
-          console.log(`📄 Updated page: ${prev} -> ${newPage}`);
-          return newPage;
+          return prev + 1;
         });
         setHasNextPage(data.pageInfo?.hasNextPage || false);
-        setTotalRows(data.pageInfo?.totalRows || totalRows);
-        console.log('🎉 Load more completed successfully');
+        setTotalRows((prev) => data.pageInfo?.totalRows ?? prev);
       } else {
-        console.log('❌ No videos returned or API error:', data.error);
         setHasNextPage(false);
       }
     } catch (error) {
-      console.error('💥 Error in loadMoreVideos:', error);
+      console.error('Error loading more videos', error);
     } finally {
-      console.log('🏁 Load more completed, setting loading to false');
       isLoadingRef.current = false;
     }
-  }, [currentPage, initialSort, totalRows, allVideos.length, hasNextPage]);
+  }, [currentPage, initialSort]);
 
   // Infinite scroll implementation
   useEffect(() => {
@@ -258,25 +234,13 @@ export function VideoListClient({ videos, pageInfo, initialSort }: VideoListClie
 
       const rect = loadingRef.current.getBoundingClientRect();
       const windowHeight = window.innerHeight;
-      const isNearBottom = rect.top <= windowHeight + 400; // Trigger even earlier (400px before loading indicator reaches bottom)
-
-      console.log('🔍 Scroll check:', {
-        rectTop: rect.top,
-        windowHeight,
-        isNearBottom,
-        loadingIndicatorVisible: shouldShowLoadingIndicator,
-        isLoading: isLoadingRef.current,
-        // Show how much content is left below the loading indicator
-        contentBelow: rect.top - windowHeight
-      });
+      const isNearBottom = rect.top <= windowHeight + 400; // Trigger slightly before reaching the end
 
       if (isNearBottom && shouldShowLoadingIndicator) {
-        console.log('🎯 Triggering load more videos via scroll (early trigger)');
         loadMoreVideos();
       }
     };
 
-    console.log('📏 Setting up scroll listener, loading indicator should be:', shouldShowLoadingIndicator);
     window.addEventListener('scroll', handleScroll, { passive: true });
 
     // Also check on initial load in case loading indicator is already visible
@@ -285,13 +249,11 @@ export function VideoListClient({ videos, pageInfo, initialSort }: VideoListClie
       const windowHeight = window.innerHeight;
       const isNearBottom = rect.top <= windowHeight + 400;
       if (isNearBottom) {
-        console.log('🚀 Initial load trigger - loading indicator is visible (early trigger)');
         loadMoreVideos();
       }
     }
 
     return () => {
-      console.log('🧹 Cleaning up scroll listener');
       window.removeEventListener('scroll', handleScroll);
     };
   }, [loadMoreVideos, shouldShowLoadingIndicator]);
