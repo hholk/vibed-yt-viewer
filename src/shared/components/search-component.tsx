@@ -50,7 +50,7 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [hasNextPage, setHasNextPage] = useState(initialVideos.length >= 25); // Assume more if we got a full page
+  const [hasNextPage, setHasNextPage] = useState(initialVideos.length >= 35); // Assume more if we got a full page
   const [totalResults, setTotalResults] = useState(0);
   const loadingRef = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false);
@@ -115,7 +115,7 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
 
       try {
         const page = currentPage; // Use current page number, not currentPage + 1
-        const response = await fetch(`/api/videos?page=${page}&limit=70&sort=-CreatedAt`);
+        const response = await fetch(`/api/videos?page=${page}&limit=35&sort=-CreatedAt`);
         const data = await response.json();
 
         if (data.success && data.videos && data.videos.length > 0) {
@@ -155,9 +155,9 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
       const query = searchTags.map(tag => tag.value).join(' ');
       const categories = selectedCategories.length > 0 ? selectedCategories : SEARCH_CATEGORIES.map(cat => cat.key);
       const page = isLoadMore ? currentPage : 1;
-      const offset = (page - 1) * 70;
+      const offset = (page - 1) * 35;
 
-      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&categories=${encodeURIComponent(categories.join(','))}&limit=70&offset=${offset}&sort=-CreatedAt`);
+      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&categories=${encodeURIComponent(categories.join(','))}&limit=35&offset=${offset}&sort=-CreatedAt`);
       const data = await response.json();
 
       if (data.success) {
@@ -167,7 +167,7 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
         } else {
           setSearchResults(data.videos || []);
           setCurrentPage(1);
-          setHasNextPage((data.videos?.length || 0) === 70);
+          setHasNextPage((data.videos?.length || 0) === 35);
           setTotalResults(data.total || 0);
         }
       } else {
@@ -216,7 +216,7 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
 
     const rect = loadingRef.current.getBoundingClientRect();
     const windowHeight = window.innerHeight;
-    const isNearBottom = rect.top <= windowHeight + 300; // Trigger 300px before loading indicator reaches bottom
+    const isNearBottom = rect.top <= windowHeight + 800; // Trigger 800px before loading indicator reaches bottom
 
     if (isNearBottom && hasNextPage) {
       performSearch(true);
