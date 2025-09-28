@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy, Trash2, XCircle } from 'lucide-react';
+import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy, Trash2, XCircle, Download } from 'lucide-react';
 import type { Video, VideoListItem } from '@/features/videos/api/nocodb';
 import { StarRating } from '@/features/videos/components';
 import { SafeReactMarkdown } from '@/shared/components/safe-react-markdown';
@@ -448,48 +448,6 @@ export function VideoDetailPageContent({
     return () => document.removeEventListener('keydown', handleKeyPress);
   }, [navigateToVideo, previousVideo, nextVideo]);
 
-  const handleSaveComment = async () => {
-    if (!currentVideo?.VideoID) {
-      setSaveError('No video selected');
-      return;
-    }
-    setIsSaving(true);
-    setSaveError(null);
-    try {
-      const updatedFields = { PersonalComment: personalComment };
-      const response = await fetch(`/api/videos/${currentVideo.VideoID}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoId: currentVideo.VideoID, data: updatedFields })
-      });
-      const result = await response.json();
-      if (result.success) {
-        setCurrentVideo(prev => ({ ...prev!, ...updatedFields }));
-        setIsEditingComment(false);
-      } else {
-        throw new Error(result.error || 'Failed to save note');
-      }
-    } catch (error) {
-      console.error('Failed to save comment:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-
-      // Provide more specific error messages based on error type
-      let userMessage = `Failed to save note: ${errorMessage}`;
-      if (errorMessage.includes('404') || errorMessage.includes('Cannot PATCH')) {
-        userMessage = 'Note save failed: Your NocoDB API token may not have update permissions. Please check your NocoDB dashboard settings and create a new API token with write access.';
-      } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
-        userMessage = 'Note save failed: Access denied. Please check your NocoDB API token permissions.';
-      } else if (errorMessage.includes('500')) {
-        userMessage = 'Note save failed: NocoDB server error. Please try again later.';
-      }
-
-      setSaveError(`${userMessage}. Check browser console for details.`);
-    } finally {
-      setIsSaving(false);
-
-    }
-  };
-
   const handleRatingChange = async (newRating: number | null, field: keyof Video) => {
     if (!currentVideo?.VideoID) {
       setSaveError('No video selected');
@@ -544,9 +502,72 @@ export function VideoDetailPageContent({
     }
   };
 
+  const handleSaveComment = async () => {
+    if (!currentVideo?.VideoID) {
+      setSaveError('No video selected');
+      return;
+    }
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const updatedFields = { PersonalComment: personalComment };
+      const response = await fetch(`/api/videos/${currentVideo.VideoID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId: currentVideo.VideoID, data: updatedFields })
+      });
+      const result = await response.json();
+      if (result.success) {
+        setCurrentVideo(prev => ({ ...prev!, ...updatedFields }));
+        setIsEditingComment(false);
+      } else {
+        throw new Error(result.error || 'Failed to save note');
+      }
+    } catch (error) {
+      console.error('Failed to save comment:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
 
+      // Provide more specific error messages based on error type
+      let userMessage = `Failed to save note: ${errorMessage}`;
+      if (errorMessage.includes('404') || errorMessage.includes('Cannot PATCH')) {
+        userMessage = 'Note save failed: Your NocoDB API token may not have update permissions. Please check your NocoDB dashboard settings and create a new API token with write access.';
+      } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+        userMessage = 'Note save failed: Access denied. Please check your NocoDB API token permissions.';
+      } else if (errorMessage.includes('500')) {
+        userMessage = 'Note save failed: NocoDB server error. Please try again later.';
+      }
 
+      setSaveError(`${userMessage}. Check browser console for details.`);
+    } finally {
+      setIsSaving(false);
 
+    }
+  };
+
+  const handleExportMarkdown = async () => {
+    if (!currentVideo?.VideoID) return;
+
+    try {
+      const response = await fetch(`/api/videos/${currentVideo.VideoID}/export?videoId=${currentVideo.VideoID}`);
+      if (!response.ok) {
+        throw new Error('Failed to export video data');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `${currentVideo.Title || 'video'}.md`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Failed to export video:', error);
+      alert('Failed to export video data. Please try again.');
+    }
+  };
 
   const DEFAULT_FIELD_ORDER: (keyof Video)[] = [
     'ThumbHigh',
@@ -792,15 +813,25 @@ export function VideoDetailPageContent({
             <div className="p-4 bg-neutral-800 rounded-lg shadow">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-lg font-semibold text-neutral-300">Personal Note</h3>
-                {!isEditingComment && (
+                <div className="flex space-x-2">
                   <button
-                    onClick={() => setIsEditingComment(true)}
-                    className="text-sm flex items-center px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                    onClick={handleExportMarkdown}
+                    className="text-sm flex items-center px-3 py-1.5 rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors"
+                    title="Export as .md file"
                   >
-                    <Edit3 size={18} className="mr-1.5" />
-                    {currentVideo.PersonalComment ? 'Edit' : 'Add Note'}
+                    <Download size={18} className="mr-1.5" />
+                    Export as .md
                   </button>
-                )}
+                  {!isEditingComment && (
+                    <button
+                      onClick={() => setIsEditingComment(true)}
+                      className="text-sm flex items-center px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                    >
+                      <Edit3 size={18} className="mr-1.5" />
+                      {currentVideo.PersonalComment ? 'Edit' : 'Add Note'}
+                    </button>
+                  )}
+                </div>
               </div>
               {isEditingComment ? (
                 <div className="space-y-3">
