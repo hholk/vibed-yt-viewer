@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Terminal } from 'lucide-react';
 import { SearchComponent } from '@/shared/components/search-component';
+import { PWAInstallPrompt } from '@/shared/components/pwa-install-prompt';
 import { loadHomePageData } from '@/features/videos/server/load-home-page-data';
 
 type HomePageProps = {
@@ -61,6 +62,9 @@ export default async function HomePage({ searchParams = {} }: HomePageProps) {
         <div className="search-component-wrapper">
           <SearchComponent initialVideos={videos} />
         </div>
+
+        {/* PWA Install Prompt */}
+        <PWAInstallPrompt />
       </div>
     </div>
   );

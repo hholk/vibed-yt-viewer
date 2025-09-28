@@ -115,7 +115,7 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
 
       try {
         const page = currentPage; // Use current page number, not currentPage + 1
-        const response = await fetch(`/api/videos?page=${page}&limit=35&sort=-CreatedAt`);
+        const response = await fetch(`/api/videos?page=${page}&limit=70&sort=-CreatedAt`);
         const data = await response.json();
 
         if (data.success && data.videos && data.videos.length > 0) {
@@ -155,9 +155,9 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
       const query = searchTags.map(tag => tag.value).join(' ');
       const categories = selectedCategories.length > 0 ? selectedCategories : SEARCH_CATEGORIES.map(cat => cat.key);
       const page = isLoadMore ? currentPage : 1;
-      const offset = (page - 1) * 35;
+      const offset = (page - 1) * 70;
 
-      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&categories=${encodeURIComponent(categories.join(','))}&limit=35&offset=${offset}&sort=-CreatedAt`);
+      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&categories=${encodeURIComponent(categories.join(','))}&limit=70&offset=${offset}&sort=-CreatedAt`);
       const data = await response.json();
 
       if (data.success) {
@@ -167,7 +167,7 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
         } else {
           setSearchResults(data.videos || []);
           setCurrentPage(1);
-          setHasNextPage((data.videos?.length || 0) === 35);
+          setHasNextPage((data.videos?.length || 0) === 70);
           setTotalResults(data.total || 0);
         }
       } else {
@@ -439,6 +439,21 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
               <Loader2 className={`h-4 w-4 ${isLoadingRef.current ? 'animate-spin' : ''}`} />
               <span>{isLoadingRef.current ? 'Loading more videos...' : 'Scroll for more videos'}</span>
             </div>
+          </div>
+        )}
+
+        {/* Load More Button - Alternative to infinite scroll */}
+        {hasNextPage && !isLoadingRef.current && (
+          <div className="flex justify-center py-4">
+            <Button
+              variant="outline"
+              onClick={() => performSearch(true)}
+              disabled={isLoadingRef.current}
+              className="flex items-center gap-2"
+            >
+              <Loader2 className={`h-4 w-4 ${isLoadingRef.current ? 'animate-spin' : ''}`} />
+              {isLoadingRef.current ? 'Loading...' : 'Load More Videos'}
+            </Button>
           </div>
         )}
 
