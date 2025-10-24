@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy, Trash2, XCircle, Download } from 'lucide-react';
+import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy, Trash2, XCircle, Download, Check } from 'lucide-react';
 import type { Video, VideoListItem } from '@/features/videos/api/nocodb';
 import { StarRating } from '@/features/videos/components';
 import { SafeReactMarkdown } from '@/shared/components/safe-react-markdown';
@@ -79,6 +79,7 @@ const DetailItem = React.memo<DetailItemProps>(({
     return isInitiallyCollapsed ?? true;
   });
 
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -254,7 +255,7 @@ const DetailItem = React.memo<DetailItemProps>(({
     return null;
   }
 
-  const handleCopy = (e: React.MouseEvent) => {
+  const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
     let text = '';
     if (typeof value === 'string') {
@@ -265,7 +266,14 @@ const DetailItem = React.memo<DetailItemProps>(({
       text = JSON.stringify(value, null, 2);
     }
     if (text) {
-      navigator.clipboard.writeText(text);
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      } catch (err) {
+        console.error('Copy failed:', err);
+        alert('Failed to copy. Please try again.');
+      }
     }
   };
 
@@ -287,7 +295,11 @@ const DetailItem = React.memo<DetailItemProps>(({
         </span>
         <div className="flex items-center space-x-2 text-neutral-500 hover:text-neutral-300 transition-colors">
           {isMarkdown && (
-            <Copy className="h-4 w-4" onClick={handleCopy} />
+            copied ? (
+              <Check className="h-4 w-4 text-green-400 transition-transform duration-150 scale-110" />
+            ) : (
+              <Copy className="h-4 w-4 cursor-pointer transition-transform duration-150 hover:scale-110" onClick={handleCopy} />
+            )
           )}
           {isCollapsed ? (
             <ChevronRight className="h-4 w-4" />
@@ -322,6 +334,7 @@ export function VideoDetailPageContent({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDangerZoneOpen, setIsDangerZoneOpen] = useState(false);
+  const [copiedMarkdown, setCopiedMarkdown] = useState(false);
 
   // Handler to clear DetailedNarrativeFlow
   const handleClearNarrative = async () => {
@@ -569,6 +582,25 @@ export function VideoDetailPageContent({
     }
   };
 
+  const handleCopyMarkdown = async () => {
+    if (!currentVideo?.VideoID) return;
+
+    try {
+      const response = await fetch(`/api/videos/${currentVideo.VideoID}/export?videoId=${currentVideo.VideoID}`);
+      if (!response.ok) {
+        throw new Error('Failed to export video data');
+      }
+
+      const text = await response.text();
+      await navigator.clipboard.writeText(text);
+      setCopiedMarkdown(true);
+      setTimeout(() => setCopiedMarkdown(false), 1200);
+    } catch (error) {
+      console.error('Failed to copy markdown:', error);
+      alert('Failed to copy markdown. Please try again.');
+    }
+  };
+
   const DEFAULT_FIELD_ORDER: (keyof Video)[] = [
     'ThumbHigh',
     'URL',
@@ -811,26 +843,41 @@ export function VideoDetailPageContent({
 
             {}
             <div className="p-4 bg-neutral-800 rounded-lg shadow">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-lg font-semibold text-neutral-300">Personal Note</h3>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={handleExportMarkdown}
-                    className="text-sm flex items-center px-3 py-1.5 rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors"
-                    title="Export as .md file"
-                  >
-                    <Download size={18} className="mr-1.5" />
-                    Export as .md
-                  </button>
+              <div className="space-y-2">
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                  <h3 className="text-lg font-semibold text-neutral-300">Personal Note</h3>
                   {!isEditingComment && (
                     <button
                       onClick={() => setIsEditingComment(true)}
-                      className="text-sm flex items-center px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                      className="text-sm flex items-center px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors whitespace-nowrap"
                     >
-                      <Edit3 size={18} className="mr-1.5" />
-                      {currentVideo.PersonalComment ? 'Edit' : 'Add Note'}
+                      <Edit3 size={16} className="mr-1.5" />
+                      {currentVideo.PersonalComment ? 'Edit Note' : 'Add Note'}
                     </button>
                   )}
+                </div>
+                
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleCopyMarkdown}
+                    className={`text-sm flex items-center px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${copiedMarkdown ? 'bg-green-700 text-white animate-pulse' : 'bg-neutral-700 hover:bg-neutral-600 text-white'}`}
+                    title="Copy markdown to clipboard"
+                  >
+                    {copiedMarkdown ? (
+                      <Check size={16} className="mr-1.5" />
+                    ) : (
+                      <Copy size={16} className="mr-1.5" />
+                    )}
+                    {copiedMarkdown ? 'Copied' : (<><span className="hidden sm:inline">Copy </span>Markdown</>)}
+                  </button>
+                  <button
+                    onClick={handleExportMarkdown}
+                    className="text-sm flex items-center px-3 py-1.5 rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors whitespace-nowrap"
+                    title="Export as .md file"
+                  >
+                    <Download size={16} className="mr-1.5" />
+                    <span className="hidden sm:inline">Export </span>Markdown
+                  </button>
                 </div>
               </div>
               {isEditingComment ? (
