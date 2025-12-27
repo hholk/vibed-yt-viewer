@@ -144,24 +144,108 @@ sequenceDiagram
 yt-viewer/
 ├─ src/
 │  ├─ app/
+│  │  ├─ api/tts/
+│  │  │  └─ route.ts              # TTS proxy endpoint
 │  │  └─ video/[videoId]/
+│  │     └─ VideoDetailPageContent.tsx  # TTS UI controls
 │  ├─ features/
 │  │  └─ videos/
 │  │     ├─ api/
 │  │     └─ components/
 │  └─ shared/
 │     ├─ components/
+│     ├─ hooks/
+│     │  └─ use-text-to-speech.ts  # TTS React hook
 │     └─ utils/
 ├─ scripts/
 │  └─ ensure-video-state.ts
+├─ tts-app.sh                      # Combined startup script
+├─ TTS_README.md                   # TTS documentation
 ├─ README.md
 ├─ SETUP.md
 ├─ AGENTS.md
 └─ architecture.md (this file)
+
+~/CosyVoice/                       # TTS Server (separate repo)
+├─ tts_server.py                   # FastAPI TTS server
+├─ start_tts_server.sh
+└─ pretrained_models/
+   └─ Fun-CosyVoice3-0.5B/
 ```
+
+## Text-to-Speech (TTS) Architecture
+
+The application includes a TTS feature powered by CosyVoice 3 for reading video content aloud.
+
+### TTS Data Flow
+
+```mermaid
+sequenceDiagram
+  participant UI as VideoDetailPage
+  participant Hook as useTextToSpeech Hook
+  participant Proxy as /api/tts (Next.js Route)
+  participant TTS as CosyVoice Server (port 50000)
+
+  UI->>Hook: play(segments)
+  Hook->>Hook: splitIntoChunks (2 sentences, max 600 chars)
+  Hook->>Proxy: POST /api/tts (prefetch first chunk)
+  Proxy->>TTS: POST /tts { text, language, speed }
+  TTS-->>Proxy: audio/wav blob
+  Proxy-->>Hook: audio blob
+  Hook->>UI: status: 'playing'
+
+  loop For each chunk (with PREFETCH_AHEAD = 2)
+    Hook->>Proxy: POST /api/tts (next chunks)
+    Proxy->>TTS: POST /tts
+    TTS-->>Proxy: audio/wav
+    Proxy-->>Hook: audio blob
+    Hook->>Hook: playAudioBlob()
+  end
+
+  Hook->>UI: status: 'idle'
+```
+
+### TTS Components
+
+- **`src/shared/hooks/use-text-to-speech.ts`**
+  - React hook managing TTS state (idle, preparing, playing, paused, error)
+  - Prefetch-ahead buffering (2 segments) for gapless playback
+  - Automatic language detection (German/English)
+  - Text chunking (2 sentences per chunk, max 600 chars)
+  - Markdown stripping before synthesis
+
+- **`src/app/api/tts/route.ts`**
+  - Same-origin proxy to avoid CORS/mixed-content issues
+  - Streams audio response from CosyVoice server
+  - Supports `/api/tts` (single) and `/api/tts/prepare` (batch) endpoints
+
+- **CosyVoice Server** (`~/CosyVoice/tts_server.py`)
+  - FastAPI server on `http://127.0.0.1:50000`
+  - Model: Fun-CosyVoice3-0.5B (multilingual)
+  - Hash-based audio caching
+  - Endpoints: `/health`, `/tts`, `/prepare`, `/audio/{filename}`, `/cache`
+
+### TTS Performance Optimizations
+
+- **Prefetch-ahead**: Fetches next 2 chunks while current plays
+- **Lazy Audio initialization**: `<audio>` element created only when user clicks "Read Aloud"
+- **Server-side caching**: CosyVoice caches generated audio by text hash
+- **Batch preparation**: `/prepare` endpoint pre-generates all chunks
+- **First-chunk priority**: Extended timeout (120s) for first segment to handle model warm-up
+
+### Startup Script
+
+`./tts-app.sh` manages both services:
+- `start` / `stop` / `restart` – all services
+- `start-tts` / `stop-tts` – TTS server only
+- `start-app` / `stop-app` – Next.js only
+- `status` – health check
+- `logs tts|nextjs` – view logs
+- `-v` flag for verbose output
 
 ## Future Improvements
 
 - Add E2E (Playwright) for update/delete flows.
 - Add Storybook for UI primitives.
 - Expand caching strategy if needed (stale-while-revalidate patterns, etc.).
+- Add TTS voice selection UI for different speakers/accents.

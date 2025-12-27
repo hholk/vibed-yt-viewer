@@ -3,10 +3,12 @@ export { getNocoDBConfig } from './config';
 
 export {
   videoSchema,
+  videoOfflineCacheItemSchema,
   videoListItemSchema,
   pageInfoSchema,
   createNocoDBResponseSchema,
   type Video,
+  type VideoOfflineCacheItem,
   type VideoListItem,
   type PageInfo,
 } from './schemas';

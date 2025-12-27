@@ -191,12 +191,23 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
     }
   }, [searchTags, selectedCategories, currentPage]);
 
-  // Trigger search when dependencies change
+  // Trigger search when tags or categories change
   useEffect(() => {
-    if (searchTags.length > 0 || (searchTags.length === 0 && initialVideos.length === 0)) {
+    if (searchTags.length > 0) {
+      console.log('[SearchComponent] Search tags changed, calling performSearch...');
       performSearch(false);
     }
-  }, [searchTags, selectedCategories, currentPage, performSearch, initialVideos.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTags, selectedCategories]);
+
+  // Initial load: fetch videos if initialVideos is empty (run once on mount)
+  useEffect(() => {
+    if (initialVideos.length === 0) {
+      console.log('[SearchComponent] Initial mount with empty videos, fetching...');
+      performSearch(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Initialize searchResults with initialVideos
   useEffect(() => {

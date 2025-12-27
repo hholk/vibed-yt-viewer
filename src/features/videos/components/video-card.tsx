@@ -1,11 +1,10 @@
-import Link from 'next/link';
 import Image from 'next/image';
 
-import type { VideoListItem } from '@/features/videos/api/nocodb';
+import type { VideoListItem} from '@/features/videos/api/nocodb';
 
 interface VideoCardProps {
-  video: VideoListItem; 
-  priority?: boolean; 
+  video: VideoListItem;
+  priority?: boolean;
 }
 
 export function VideoCard({ video, priority = false }: VideoCardProps) {
@@ -14,7 +13,7 @@ export function VideoCard({ video, priority = false }: VideoCardProps) {
 
   return (
 
-    <Link href={`/video/${video.VideoID}`} passHref className="block hover:shadow-lg transition-shadow duration-200 rounded-lg h-full">
+    <a href={`/video/${video.VideoID}`} className="block hover:shadow-lg transition-shadow duration-200 rounded-lg h-full">
       <div
         className="w-full flex flex-col h-full rounded-lg shadow-sm hover:shadow-md transition-shadow"
         style={{
@@ -64,6 +63,6 @@ export function VideoCard({ video, priority = false }: VideoCardProps) {
           </div>
         </div>
       </div>
-    </Link>
+    </a>
   );
 }

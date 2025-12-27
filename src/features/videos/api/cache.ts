@@ -23,3 +23,7 @@ export function setInCache<T>(key: string, data: T) {
 export function deleteFromCache(key: string) {
   globalCache.delete(key);
 }
+
+export function clearAllCache() {
+  globalCache.clear();
+}

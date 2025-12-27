@@ -230,6 +230,81 @@ export const videoSchema = z
 
 export type Video = z.infer<typeof videoSchema>;
 
+/**
+ * Offline cache payload
+ *
+ * This schema is intentionally a subset of `videoSchema` so the offline cache
+ * stays small while still supporting the detail view (summaries, notes, ratings).
+ * Transcript fields are deliberately excluded.
+ */
+export const videoOfflineCacheItemSchema = videoSchema
+  .pick({
+    Id: true,
+    rowId: true,
+    RowId: true,
+    _rowId: true,
+    VideoID: true,
+    URL: true,
+    ThumbHigh: true,
+    Title: true,
+    Channel: true,
+    Description: true,
+    VideoGenre: true,
+    Persons: true,
+    Companies: true,
+    Indicators: true,
+    Trends: true,
+    InvestableAssets: true,
+    TickerSymbol: true,
+    Institutions: true,
+    EventsFairs: true,
+    DOIs: true,
+    Hashtags: true,
+    MainTopic: true,
+    PrimarySources: true,
+    Sentiment: true,
+    SentimentReason: true,
+    TechnicalTerms: true,
+    Speaker: true,
+    CreatedAt: true,
+    UpdatedAt: true,
+    PublishedAt: true,
+    ImportanceRating: true,
+    PersonalComment: true,
+    Watched: true,
+    Notes: true,
+    Tags: true,
+    Categories: true,
+    CompletionDate: true,
+    ActionableAdvice: true,
+    TLDR: true,
+    MainSummary: true,
+    DetailedNarrativeFlow: true,
+    MemorableQuotes: true,
+    MemorableTakeaways: true,
+    KeyExamples: true,
+    BookMediaRecommendations: true,
+    RelatedURLs: true,
+    TopicsDiscussed: true,
+    Speakers: true,
+    Subtitles: true,
+    Duration: true,
+    Language: true,
+    Priority: true,
+    Status: true,
+  })
+  .extend({
+    // Be tolerant in the offline cache: malformed URLs should not break the whole sync payload.
+    URL: z.preprocess(preprocessors.extractUrlFromArray, z.string().optional().nullable()),
+    RelatedURLs: z.preprocess(
+      preprocessors.emptyObjectToNull,
+      z.array(z.string()).nullable().default([]).optional(),
+    ),
+  })
+  .describe('videoOfflineCacheItemSchema');
+
+export type VideoOfflineCacheItem = z.infer<typeof videoOfflineCacheItemSchema>;
+
 export const videoListItemSchema = z
   .object({
     Id: z.number().int(),

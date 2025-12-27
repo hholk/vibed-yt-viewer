@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Serif, IBM_Plex_Mono } from 'next/font/google';
 import { ErrorBoundary } from '@/shared/components/error-boundary';
+import { OfflineIndicator } from '@/shared/components/offline-indicator';
+import { ServiceWorkerRegistration } from '@/shared/components/service-worker-registration';
 import "./globals.css";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -25,7 +27,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Youtube Viewer",
   description: "View and curate your favorite Youtube videos.",
-  manifest: "/manifest.json",
+  manifest: "/manifest.webmanifest",
 };
 
 export const viewport = {
@@ -42,6 +44,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${ibmPlexSans.variable} ${ibmPlexSerif.variable} ${ibmPlexMono.variable}`}>
       <body className={`antialiased`}>
+        <ServiceWorkerRegistration />
+        <OfflineIndicator />
         <ErrorBoundary>
           {children}
         </ErrorBoundary>
@@ -49,4 +53,3 @@ export default function RootLayout({
     </html>
   );
 }
-

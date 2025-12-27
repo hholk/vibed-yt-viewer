@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy, Trash2, XCircle, Download, Check } from 'lucide-react';
+import { Edit3, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, AlertTriangle, Copy, Trash2, XCircle, Download, Check, Volume2, VolumeX, Loader2, Pause, Play } from 'lucide-react';
+import { useTextToSpeech, extractExpandedText } from '@/shared/hooks/use-text-to-speech';
 import type { Video, VideoListItem } from '@/features/videos/api/nocodb';
 import { StarRating } from '@/features/videos/components';
 import { SafeReactMarkdown } from '@/shared/components/safe-react-markdown';
@@ -28,6 +29,14 @@ const formatFieldName = (fieldName: string): string => {
     .replace(/^\w/, (c) => c.toUpperCase());
 };
 
+// Deterministic date formatting to avoid SSR/CSR hydration mismatch.
+const formatDateTimeUtc = (value: string | Date): string => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  // ISO without milliseconds, always UTC.
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+};
+
 const MARKDOWN_FIELDS = [
   'ActionableAdvice',
   'TLDR',
@@ -38,6 +47,10 @@ const MARKDOWN_FIELDS = [
   'MemorableQuotes',
   'MemorableTakeaways',
   'Description',
+  'Notes',
+  'BookMediaRecommendations',
+  'RelatedURLs',
+  'SentimentReason',
 ];
 
 interface DetailItemProps {
@@ -191,16 +204,7 @@ const DetailItem = React.memo<DetailItemProps>(({
 
     // Handle dates
     if (value instanceof Date || (typeof value === 'string' && !isNaN(Date.parse(value)))) {
-      const date = new Date(value);
-      return date.toLocaleString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      });
+      return formatDateTimeUtc(value as string | Date);
     }
 
     if (typeof value === 'object' && value !== null) {
@@ -336,6 +340,34 @@ export function VideoDetailPageContent({
   const [isDangerZoneOpen, setIsDangerZoneOpen] = useState(false);
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
 
+  // TTS (Text-to-Speech) functionality
+  const tts = useTextToSpeech();
+
+  const handleReadAloud = useCallback(() => {
+    if (tts.isPlaying || tts.isPreparing) {
+      tts.stop();
+      return;
+    }
+
+    // Extract text from all expanded sections
+    const segments = extractExpandedText();
+
+    if (segments.length === 0) {
+      alert('No expanded sections to read. Please expand some content sections first.');
+      return;
+    }
+
+    tts.play(segments);
+  }, [tts]);
+
+  const handleTTSPauseResume = useCallback(() => {
+    if (tts.status === 'paused') {
+      tts.resume();
+    } else {
+      tts.pause();
+    }
+  }, [tts]);
+
   // Handler to clear DetailedNarrativeFlow
   const handleClearNarrative = async () => {
     if (!currentVideo?.VideoID) return;
@@ -431,9 +463,10 @@ export function VideoDetailPageContent({
     }
 
     if (targetVideoId) {
-      router.push(`/video/${targetVideoId}${queryString}`);
+      // Use window.location.href for offline compatibility
+      window.location.href = `/video/${targetVideoId}${queryString}`;
     }
-  }, [previousVideo, nextVideo, router, searchParams]);
+  }, [previousVideo, nextVideo, searchParams]);
 
   // Add keyboard navigation support
   useEffect(() => {
@@ -602,8 +635,11 @@ export function VideoDetailPageContent({
   };
 
   const DEFAULT_FIELD_ORDER: (keyof Video)[] = [
+    // Thumbnail & URL
     'ThumbHigh',
     'URL',
+
+    // Main Content
     'MainTopic',
     'TLDR',
     'MainSummary',
@@ -615,23 +651,68 @@ export function VideoDetailPageContent({
     'MemorableTakeaways',
     'BookMediaRecommendations',
     'RelatedURLs',
+    'Description',
+
+    // Metadata
+    'Duration',
+    'Language',
+    'Source',
     'VideoGenre',
+    'Speaker',
+
+    // Status & User Data
+    'Status',
+    'Priority',
+    'Watched',
+    'Archived',
+    'Private',
+    'Notes',
+    'Task',
+    'Project',
+    'AssignedTo',
+    'Prompt',
+
+    // Dates
+    'CompletionDate',
+    'DueDate',
+
+    // Entities
     'Persons',
     'Companies',
     'Indicators',
     'Trends',
     'InvestableAssets',
-    'Ticker',
+    'TickerSymbol',
     'Institutions',
     'EventsFairs',
+    'Locations',
+    'Events',
+    'Products',
+    'Speakers',
     'DOIs',
-    'Hashtags',
     'PrimarySources',
+    'TechnicalTerms',
+
+    // Categorization
+    'Hashtags',
+    'Tags',
+    'Categories',
+    'TopicsDiscussed',
+    'Mood',
     'Sentiment',
     'SentimentReason',
-    'Description',
-    'TechnicalTerms',
-    'Speaker',
+
+    // Technical
+    'OriginalTitle',
+    'OriginalChannel',
+    'FileFormat',
+    'FileSize',
+    'Resolution',
+    'FrameRate',
+    'BitRate',
+    'Subtitles',
+
+    // Transcript
     'Transcript'
   ];
 
@@ -839,6 +920,68 @@ export function VideoDetailPageContent({
                 size={28}
                 readOnly={isSaving}
               />
+            </div>
+
+            {/* Text-to-Speech Controls */}
+            <div className="p-4 bg-neutral-800 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-3 text-neutral-300">Read Aloud</h3>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleReadAloud}
+                    disabled={tts.status === 'error'}
+                    className={`flex-1 flex items-center justify-center px-4 py-2.5 rounded-md transition-all duration-200 ${
+                      tts.isPlaying || tts.isPreparing
+                        ? 'bg-red-600 hover:bg-red-500 text-white'
+                        : 'bg-purple-600 hover:bg-purple-500 text-white'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    title={tts.isPlaying || tts.isPreparing ? 'Stop reading' : 'Read expanded sections aloud'}
+                  >
+                    {tts.isPreparing ? (
+                      <>
+                        <Loader2 size={18} className="mr-2 animate-spin" />
+                        Preparing...
+                      </>
+                    ) : tts.isPlaying ? (
+                      <>
+                        <VolumeX size={18} className="mr-2" />
+                        Stop
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 size={18} className="mr-2" />
+                        Read Aloud
+                      </>
+                    )}
+                  </button>
+                  {(tts.isPlaying || tts.status === 'paused') && (
+                    <button
+                      onClick={handleTTSPauseResume}
+                      className="px-3 py-2.5 rounded-md bg-neutral-700 hover:bg-neutral-600 text-white transition-colors"
+                      title={tts.status === 'paused' ? 'Resume' : 'Pause'}
+                    >
+                      {tts.status === 'paused' ? <Play size={18} /> : <Pause size={18} />}
+                    </button>
+                  )}
+                </div>
+                {(tts.isPlaying || tts.isPreparing || tts.status === 'paused') && tts.totalSegments > 0 && (
+                  <div className="text-xs text-neutral-400">
+                    Segment {tts.currentSegmentIndex + 1} of {tts.totalSegments}
+                    <div className="mt-1 h-1 bg-neutral-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-purple-500 transition-all duration-300"
+                        style={{ width: `${((tts.currentSegmentIndex + 1) / tts.totalSegments) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {tts.error && (
+                  <p className="text-xs text-red-400">{tts.error}</p>
+                )}
+                <p className="text-xs text-neutral-500">
+                  Reads all expanded content sections. Make sure the TTS server is running.
+                </p>
+              </div>
             </div>
 
             {}

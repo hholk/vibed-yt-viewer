@@ -205,6 +205,14 @@ export function VideoListClient({ videos, pageInfo, initialSort }: VideoListClie
       const response = await fetch(`/api/videos?page=${currentPage}&limit=25&sort=${initialSort || '-CreatedAt'}`);
       const data = await response.json();
 
+      // Check if we're in offline mode
+      if (data.offline) {
+        console.log('[VideoList] Offline mode detected - no more pages available');
+        setHasNextPage(false);
+        isLoadingRef.current = false;
+        return;
+      }
+
       if (data.success && data.videos && data.videos.length > 0) {
         setAllVideos(prev => {
           const newVideos = [...prev, ...data.videos];
@@ -219,7 +227,9 @@ export function VideoListClient({ videos, pageInfo, initialSort }: VideoListClie
         setHasNextPage(false);
       }
     } catch (error) {
-      console.error('Error loading more videos', error);
+      console.error('[VideoList] Error loading more videos (network failed, probably offline)', error);
+      // Network error = offline, stop trying to load more
+      setHasNextPage(false);
     } finally {
       isLoadingRef.current = false;
     }
