@@ -11,6 +11,12 @@ function isStaticAssetPath(pathname: string): boolean {
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  // Block accidental requests for internal build output paths.
+  // These files are not meant to be fetched by the browser, and attempts can spam the server with ENOENT logs.
+  if (pathname.startsWith('/_next/server/')) {
+    return new NextResponse('Not Found', { status: 404 });
+  }
+
   // Never protect Next.js assets / static files.
   // If these are blocked, the app can't hydrate and the UI will appear broken.
   if (isStaticAssetPath(pathname)) {

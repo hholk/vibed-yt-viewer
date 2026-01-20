@@ -242,4 +242,3 @@ export async function deleteVideo(
   throw toRequestError('deleteVideo', lastError, `${config.url}/api/v2/tables/${resolvedTableId}/records`);
 }
 
-export const updateVideoSimple = updateVideo;

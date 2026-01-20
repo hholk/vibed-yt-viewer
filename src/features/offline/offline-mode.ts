@@ -55,17 +55,3 @@ export async function toggleOfflineMode(): Promise<boolean> {
 export function isOnline(): boolean {
   return typeof navigator !== 'undefined' ? navigator.onLine : true;
 }
-
-/**
- * Check if app should use offline mode
- * (offline mode enabled AND no network connection)
- */
-export async function shouldUseOfflineMode(): Promise<boolean> {
-  const offlineEnabled = await getOfflineMode();
-  const online = isOnline();
-
-  // Use offline mode if:
-  // - User has enabled offline mode AND
-  // - Currently offline
-  return offlineEnabled && !online;
-}

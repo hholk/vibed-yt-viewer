@@ -23,7 +23,6 @@ export {
 
 export {
   updateVideo,
-  updateVideoSimple,
   deleteVideo,
   normalizeImportanceRating,
   normalizePersonalComment,

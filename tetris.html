@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tetris in JS‑CodeSandbox</title>
+  <style>
+    body { margin:0; overflow:hidden; background:#111; display:flex; justify-content:center; align-items:center; height:100vh; }
+    #gameCanvas { background:#222; image-rendering:pixelated; image-rendering:-webkit-optimize-edges;}
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="240" height="480"></canvas>
+
+  <script>
+    // -------------------------------------------------
+    //   Simple Tetris – pure JavaScript (Canvas)
+    // -------------------------------------------------
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // ---- Einstellungen -------------------------------------------------
+    const COLS = 10;          // Spielfeld-Breite (Zellen)
+    const ROWS = 20;          // Spielfeld-Höhe (Zellen)
+    const BLOCK_SIZE = 24;    // Größe einer Zelle in Pixeln
+    const COLORS = [
+      null,
+      '#00f0f0', // I
+      '#00f800', // J
+      '#004080', // L
+      '#f0a000', // O
+      '#f05030', // S
+      '#a020f0', // T
+      '#808000', // Z
+      '#ffcc00'  // SRS‑Rot (nur zur Visualisierung)
+    ];
+    const SHAPES = [
+      null,
+      [[1,1,1,1]],                     // I
+      [[1,0,0],[1,1,1]],               // J
+      [[0,0,1],[1,1,1]],               // L
+      [[1,1],[1,1]],                     // O
+      [[0,1,1],[1,1,0]],               // S
+      [[0,1,0],[1,1,1]],               // T
+      [[1,1,0],[0,1,1]]                // Z
+    ];
+
+    let board = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+    let currentPiece = null;
+    let dropCounter = 0;
+    let dropInterval = 1000; // ms (wird schneller)
+    let lastTime = 0;
+    let score = 0;
+
+    // -------------------------------------------------
+    //   Hilfsfunktionen
+    // -------------------------------------------------
+    function createPiece(type) {
+      const shape = SHAPES[type];
+      // zufällige Rotation (0‑3)
+      const rot = Math.floor(Math.random()*4);
+      const matrix = rotate(matrixFromShape(shape), rot);
+      return {
+        matrix,
+        pos: { x: Math.floor(COLS/2)-Math.floor(matrix[0].length/2), y: 0 }
+      };
+    }
+
+    function rotate(matrix, dir) {
+      const m = JSON.parse(JSON.stringify(matrix));
+      if (dir > 0){
+        for(let y=0; y<m.length; ++y){
+          for(let x=0; x<y; ++x){
+            [m[x][y], m[y][x]] = [m[y][x], m[x][y];
+          }
+        }
+      }
+      if(dir>0){
+        for(let y=0; y<m.length; ++y) {
+          let row = m[y];
+          reverseArray(row);
+        }
+      } else {
+        for(let y=0; y<m.length; ++y){
+          let row = m[y];
+          reverseArray(row);
+        }
+      }
+      return m;
+    }
+
+    function reverseArray(array){
+      let l = 0, r = array.length-1;
+      while(l<r){ [array[l], array[r]] = [array[r], array[l]]; l++; r--; }
+    }
+
+    function collide(board, piece){
+      const m = piece.matrix;
+      const o = piece.pos.x;
+      for(let y=0; y<m.length; ++y){
+        for(let x=0; x<m[y].length; ++x){
+          if(m[y][x] !== 0){
+            if(
+              x+o <0 ||
+              x+o >= COLS ||
+              y>= ROWS ||
+              board[y][x+o] !==0
+            ) return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function merge(board, piece){
+      const m = piece.matrix;
+      for(let y=0; y<m.length; ++y){
+        for(let x=0; x<m[y].length; ++x){
+          if(m[y][x]!==0) board[y+piece.pos.y][x+piece.pos.x]= m[y][x];
+        }
+      }
+    }
+
+    function clearLines(board){
+      let rowsCleared = 0;
+      for(let y=board.length-1; y>=0; --y){
+        if(board[y].every(v=>v!==0)){
+          // Zeile entfernen
+          board.splice(y,1);
+          board.unshift(Array(COLS).fill(0));
+          ++rowsCleared;
+        }
+      }
+      if(rowsCleared>0){
+        score += (rowsCleared**2)*100;
+      }
+      return rowsCleared;
+    }
+
+    function drawMatrix(matrix, offset){
+      matrix.forEach(row=>row.forEach(value=> {
+        if(value!==0){
+          ctx.fillStyle = COLORS[value];
+          ctx.fillRect((x+offset.x)*BLOCK_SIZE, (y+offset.y)*BLOCK_SIZE,
+                         BLOCK_SIZE-1, BLOCK_SIZE-1);
+        }
+      }));
+    }
+
+    function draw() {
+      ctx.fillStyle = '#222';
+      ctx.fillRect(0,0,canvas.width, canvas.height);
+      // Zeichne Spielfeld
+      for(let y=0; y<ROWS; ++y){
+        for(let x=0; x<COLS; ++x){
+          if(board[y][x]!==0){
+            ctx.fillStyle = COLORS[board[y][x]];
+            ctx.fillRect(x*BLOCK_SIZE, y*BLOCK_SIZE,
+                         BLOCK_SIZE-1, BLOCK_SIZE-1);
+          }
+        }
+      }
+      // Zeichne fallende Figur
+      if(currentPiece){
+        drawMatrix(currentPiece.matrix, currentPiece.pos);
+      }
+    }
+
+    function playerDrop(){
+      currentPiece.pos.y++;
+      if(collide(board,currentPiece)){
+        currentPiece.pos.y--;
+        merge(board,currentPiece);
+        clearLines(board);
+        spawnPiece();
+      }
+      dropCounter = 0;
+    }
+
+    function playerMove(dir){
+      currentPiece.pos.x += dir;
+      if(collide(board,currentPiece)){
+        currentPiece.pos.x -= dir;
+      }
+    }
+
+    function playerRotate(){
+      const original = currentPiece.matrix;
+      const posX = currentPiece.pos.x;
+      let y = 0;
+      while(true){
+        const m = rotate(original, y);
+        if(collide(board,{matrix:m,pos:{x:currentPiece.pos.x}})) break;
+        ++y;
+      }
+      currentPiece.matrix = rotate(original, y);
+    }
+
+    function spawnPiece(){
+      const type = Math.floor(Math.random()*7)+1;
+      currentPiece = createPiece(type);
+      if(collide(board,currentPiece)){
+        // Game Over
+        board.forEach(row=>row.fill(0));
+        score = 0;
+      }
+    }
+
+    function update(time=0){
+      const deltaTime = time - lastTime;
+      lastTime = time;
+      dropCounter += deltaTime;
+      if(dropCounter > dropInterval){
+        playerDrop();
+      }
+    }
+
+    // -------------------------------------------------
+    //   Eingaben / Controls
+    // -------------------------------------------------
+    const KEY = {
+      LEFT:37,
+      RIGHT:39,
+      DOWN:40,
+      SPACE:32
+    };
+    
+    const player = {
+      posX:0,
+      dropCounter:0,
+      dropInterval:1000,
+      // Zeitstempel vom vorherigen Frame
+      lastTime:0,
+      dropCounter:0,
+      piece:null
+    };
+
+    function playerDrop(){
+      player.pos.y++;
+      if(collide(board,player.piece)){
+        player.pos.y--;
+        merge(board,player.piece);
+        clearLines(board);
+        spawnPiece();
+      }
+      player.dropCounter=0;
+    }
+
+    function playerMove(dir){
+      player.pos.x += dir;
+      if(collide(board,player.piece)){
+        player.pos.x -= dir;
+      }
+    }
+
+    function playerRotate(){
+      const m = rotate(player.piece.matrix, 1);
+      if(!collide(board,{matrix:m,pos:player.pos})){
+        player.piece.matrix = m;
+      } else {
+        // Versuch mit Gegenrichtung
+        const m2 = rotate(player.piece.matrix,-1);
+        if(!collide(board,{matrix:m2,pos:player.pos})){
+          player.piece.matrix = m2;
+        }
+      }
+    }
+
+    // Tastatur-Handling
+    document.addEventListener('keydown', event=>{
+      switch(event.keyCode){
+        case KEY.LEFT:  playerMove(-1); break;
+        case KEY.RIGHT: playerMove(1);  break;
+        case KEY.DOWN:  playerDrop();   break; // Schnellfallen
+        case KEY.SPACE: // Hard Drop (Schnell bis unten)
+          while(!collide(board,{matrix:player.piece.matrix,
+                                pos:{x:player.pos.x, y:player.pos.y+1}})){
+                player.pos.y++;
+              }
+              playerDrop();
+          break;
+        case 38: // Pfe hoch = Rotieren
+          playerRotate(); break;
+      }
+    });
+
+    // -------------------------------------------------
+    //   Spiel‑Loop (requestAnimationFrame)
+    // -------------------------------------------------
+    function update(time){
+      const delta = time - lastTime;
+      lastTime = time;
+      dropCounter += delta;
+      if(dropCounter > player.dropInterval){
+        playerDrop();
+      }
+    }
+
+    // -------------------------------------------------
+    //   Haupt‑Loop (wird von CodeSandbox automatisch aufgerufen)
+    // -------------------------------------------------
+    let lastTimestamp = 0;
+    function gameLoop(timestamp){
+      if(!lastTimestamp) lastTimestamp = timestamp;
+      update(timestamp);
+      draw();
+      lastTimestamp = timestamp;
+      requestAnimationFrame(gameLoop);
+    }
+
+    // -------------------------------------------------
+    //   Initialisierung
+    // -------------------------------------------------
+    function init(){
+      spawnPiece();
+      lastTime = 0;
+      requestAnimationFrame(gameLoop);
+    }
+
+    init();
+
+    // -------------------------------------------------
+    //   Steuerung per Tastatur (global)
+    // -------------------------------------------------
+    const controls = {
+      ArrowLeft: () => playerMove(-1),
+      ArrowRight:( )=> playerMove( 1),
+      ArrowDown: () => playerDrop(),
+      Space:       () => { /* Hard Drop */ }
+    };
+  </script>
+</body>
+</html>

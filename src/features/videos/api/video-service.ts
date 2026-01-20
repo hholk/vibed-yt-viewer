@@ -16,18 +16,6 @@ import { logDevEvent } from '@/shared/utils/server-logger';
 
 const DEFAULT_PAGE_SIZE = 25;
 
-export interface FetchVideosOptions<T extends z.ZodTypeAny> {
-  sort?: string;
-  limit?: number;
-  page?: number;
-  fields?: string[];
-  schema?: T;
-  ncProjectId?: string;
-  ncTableId?: string;
-  ncTableName?: string;
-  tagSearchQuery?: string;
-}
-
 function normalizeFieldName(value: string): string {
   return value.replace(/[^a-z0-9]/gi, '').toLowerCase();
 }
@@ -79,7 +67,17 @@ function buildTagFilter(query?: string): string | undefined {
 }
 
 export async function fetchVideos<T extends z.ZodTypeAny>(
-  options: FetchVideosOptions<T> = {},
+  options: {
+    sort?: string;
+    limit?: number;
+    page?: number;
+    fields?: string[];
+    schema?: T;
+    ncProjectId?: string;
+    ncTableId?: string;
+    ncTableName?: string;
+    tagSearchQuery?: string;
+  } = {},
 ): Promise<{ videos: z.infer<T>[]; pageInfo: PageInfo }> {
   const cacheKey = JSON.stringify({
     sort: options.sort,
@@ -224,18 +222,16 @@ export async function fetchVideos<T extends z.ZodTypeAny>(
   );
 }
 
-export interface FetchAllVideosOptions<T extends z.ZodTypeAny> {
-  sort?: string;
-  fields?: string[];
-  schema?: T;
-  ncProjectId?: string;
-  ncTableId?: string;
-  ncTableName?: string;
-  tagSearchQuery?: string;
-}
-
 export async function fetchAllVideos<T extends z.ZodTypeAny = typeof videoSchema>(
-  options: FetchAllVideosOptions<T> = {},
+  options: {
+    sort?: string;
+    fields?: string[];
+    schema?: T;
+    ncProjectId?: string;
+    ncTableId?: string;
+    ncTableName?: string;
+    tagSearchQuery?: string;
+  } = {},
 ): Promise<z.infer<T>[]> {
   const cacheKey = JSON.stringify({
     sort: options.sort,
@@ -252,7 +248,17 @@ export async function fetchAllVideos<T extends z.ZodTypeAny = typeof videoSchema
   const pageSize = options.fields ? 50 : DEFAULT_PAGE_SIZE;
   const schemaToUse = (options.schema || videoSchema) as T;
 
-  const fetchOptions: Omit<FetchVideosOptions<T>, 'schema'> = {
+  const fetchOptions: Omit<{
+    sort?: string;
+    limit?: number;
+    page?: number;
+    fields?: string[];
+    schema?: T;
+    ncProjectId?: string;
+    ncTableId?: string;
+    ncTableName?: string;
+    tagSearchQuery?: string;
+  }, 'schema'> = {
     sort: options.sort,
     limit: pageSize,
     fields: options.fields,

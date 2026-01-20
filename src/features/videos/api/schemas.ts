@@ -303,8 +303,6 @@ export const videoOfflineCacheItemSchema = videoSchema
   })
   .describe('videoOfflineCacheItemSchema');
 
-export type VideoOfflineCacheItem = z.infer<typeof videoOfflineCacheItemSchema>;
-
 export const videoListItemSchema = z
   .object({
     Id: z.number().int(),

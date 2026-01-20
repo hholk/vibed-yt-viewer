@@ -1,0 +1,40 @@
+# robots.txt - Block all crawlers
+# This is a private application - no indexing allowed
+
+User-agent: *
+Disallow: /
+
+# Block AI/LLM crawlers explicitly
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: cohere-ai
+Disallow: /
+
+# Block common security scanners
+User-agent: Nikto
+Disallow: /
+
+User-agent: sqlmap
+Disallow: /
+
+User-agent: Nmap
+Disallow: /
+
+# Crawl-delay for anyone who ignores disallow
+Crawl-delay: 86400

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { getCacheStats } from '../cache-manager-client';
-import { getPendingMutationsCount } from '../db/client';
+import { getVideoCount, estimateCacheSize, getMetadata, getPendingMutationsCount } from '../db/client';
 
 interface OfflineStats {
   cachedVideos: number;
@@ -24,7 +23,17 @@ export function useOfflineStats() {
   const loadStats = async () => {
     try {
       const [cacheStats, pendingCount] = await Promise.all([
-        getCacheStats(),
+        (async () => {
+          const count = await getVideoCount();
+          const size = await estimateCacheSize();
+          const lastSync = await getMetadata<number>('lastSync');
+          return {
+            cachedVideos: count,
+            cacheSizeBytes: size,
+            cacheSizeMB: Math.round(size / 1024 / 1024),
+            lastSync: lastSync ? new Date(lastSync) : null,
+          };
+        })(),
         getPendingMutationsCount(),
       ]);
 

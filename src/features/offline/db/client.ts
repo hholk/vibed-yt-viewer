@@ -2,6 +2,7 @@ import { openDB, type IDBPDatabase } from 'idb';
 import type { OfflineDBSchema } from './schema';
 import { DB_NAME, DB_VERSION } from './schema';
 import type { VideoOffline, PendingMutation } from '../schemas';
+import type { HoneypotLog } from './schema';
 
 let dbInstance: IDBPDatabase<OfflineDBSchema> | null = null;
 
@@ -39,6 +40,15 @@ export async function openOfflineDB(): Promise<IDBPDatabase<OfflineDBSchema>> {
         db.createObjectStore('metadata');
         console.log('[OfflineDB] Created metadata store');
       }
+
+      // Create honeypotLogs store (v2)
+      if (!db.objectStoreNames.contains('honeypotLogs')) {
+        const logsStore = db.createObjectStore('honeypotLogs', { keyPath: 'id' });
+        logsStore.createIndex('by-timestamp', 'timestamp', { unique: false });
+        logsStore.createIndex('by-ip', 'ip', { unique: false });
+        logsStore.createIndex('by-path', 'path', { unique: false });
+        console.log('[OfflineDB] Created honeypotLogs store with indexes');
+      }
     },
     blocked() {
       console.warn('[OfflineDB] Database blocked - close other tabs');
@@ -59,23 +69,8 @@ export async function openOfflineDB(): Promise<IDBPDatabase<OfflineDBSchema>> {
 }
 
 /**
- * Close DB connection (for cleanup)
- */
-export function closeOfflineDB(): void {
-  if (dbInstance) {
-    dbInstance.close();
-    dbInstance = null;
-  }
-}
-
-/**
  * Videos Store Operations
  */
-
-export async function getVideo(id: number): Promise<VideoOffline | undefined> {
-  const db = await openOfflineDB();
-  return db.get('videos', id);
-}
 
 export async function getVideoByVideoId(videoId: string): Promise<VideoOffline | undefined> {
   const db = await openOfflineDB();
@@ -218,3 +213,66 @@ export async function estimateCacheSize(): Promise<number> {
 export type { VideoOffline } from '../schemas';
 export type { PendingMutation } from '../schemas';
 export type { OfflineDBSchema } from './schema';
+
+/**
+ * Honeypot Logs Store Operations
+ */
+
+export async function addHoneypotLog(log: Omit<HoneypotLog, 'id'>): Promise<string> {
+  const db = await openOfflineDB();
+  const id = crypto.randomUUID();
+  const fullLog: HoneypotLog = { ...log, id };
+  await db.add('honeypotLogs', fullLog);
+  return id;
+}
+
+export async function getAllHoneypotLogs(limit = 100): Promise<HoneypotLog[]> {
+  const db = await openOfflineDB();
+  const index = db.transaction('honeypotLogs').store.index('by-timestamp');
+  const logs = await index.getAll();
+  return logs.reverse().slice(0, limit); // Newest first
+}
+
+export async function getHoneypotLogsByIP(ip: string, limit = 50): Promise<HoneypotLog[]> {
+  const db = await openOfflineDB();
+  const index = db.transaction('honeypotLogs').store.index('by-ip');
+  const logs = await index.getAll(ip);
+  return logs.reverse().slice(0, limit);
+}
+
+export async function getHoneypotLogsByPath(path: string, limit = 50): Promise<HoneypotLog[]> {
+  const db = await openOfflineDB();
+  const index = db.transaction('honeypotLogs').store.index('by-path');
+  const logs = await index.getAll(IDBKeyRange.startsWith(path));
+  return logs.reverse().slice(0, limit);
+}
+
+export async function getHoneypotLogsCount(): Promise<number> {
+  const db = await openOfflineDB();
+  return db.count('honeypotLogs');
+}
+
+export async function getUniqueIPs(): Promise<string[]> {
+  const db = await openOfflineDB();
+  const logs = await db.getAll('honeypotLogs');
+  const ips = new Set(logs.map(log => log.ip));
+  return Array.from(ips).sort();
+}
+
+export async function clearHoneypotLogs(): Promise<void> {
+  const db = await openOfflineDB();
+  await db.clear('honeypotLogs');
+}
+
+export async function deleteHoneypotLog(id: string): Promise<void> {
+  const db = await openOfflineDB();
+  await db.delete('honeypotLogs', id);
+}
+
+export async function deleteHoneypotLogsByIP(ip: string): Promise<void> {
+  const db = await openOfflineDB();
+  const index = db.transaction('honeypotLogs', 'readwrite').store.index('by-ip');
+  const logs = await index.getAll(ip);
+  const tx = db.transaction('honeypotLogs', 'readwrite');
+  await Promise.all([...logs.map(log => tx.store.delete(log.id)), tx.done]);
+}
