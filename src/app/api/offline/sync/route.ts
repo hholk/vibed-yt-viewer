@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { fetchVideos, videoOfflineCacheItemSchema } from '@/features/videos/api/nocodb';
 import { updateVideo, deleteVideo } from '@/features/videos/api/mutations';
+import { STORAGE_LIMITS } from '@/features/offline/db/schema';
+import { VIDEO_OFFLINE_FIELDS } from '@/features/videos/api/fields';
 
 // Increase timeout for slow Cloudflare tunnels (2 minutes)
 export const maxDuration = 120;
@@ -11,7 +14,7 @@ export const maxDuration = 120;
  * For 'cache': Returns newest videos from NocoDB (client stores in IndexedDB)
  * For 'mutations': Executes pending mutations from client
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const startTime = Date.now();
   console.log('[API /api/offline/sync] Received sync request');
 
@@ -34,63 +37,9 @@ export async function POST(request: Request) {
         console.log('[API /api/offline/sync] Calling fetchVideos with offline-cache params...');
         const result = await fetchVideos({
           sort: '-CreatedAt',
-          limit: 2000,
+          limit: STORAGE_LIMITS.MAX_VIDEOS,
           page: 1,
-          fields: [
-            'Id',
-            'rowId',
-            'Title',
-            'ThumbHigh',
-            'URL',
-            'Channel',
-            'Description',
-            'VideoGenre',
-            'VideoID',
-            'CreatedAt',
-            'UpdatedAt',
-            'PublishedAt',
-            'Persons',
-            'Companies',
-            'Indicators',
-            'Trends',
-            'InvestableAssets',
-            'TickerSymbol',
-            'Institutions',
-            'EventsFairs',
-            'DOIs',
-            'Hashtags',
-            'MainTopic',
-            'PrimarySources',
-            'Sentiment',
-            'SentimentReason',
-            'TechnicalTerms',
-            'Speaker',
-            // Detail view essentials (without transcripts)
-            'ImportanceRating',
-            'PersonalComment',
-            'Watched',
-            'Notes',
-            'Tags',
-            'Categories',
-            'CompletionDate',
-            'ActionableAdvice',
-            'TLDR',
-            'MainSummary',
-            'DetailedNarrativeFlow',
-            'MemorableQuotes',
-            'MemorableTakeaways',
-            'KeyExamples',
-            'BookMediaRecommendations',
-            'RelatedURLs',
-            // Extra context used across UI/search
-            'TopicsDiscussed',
-            'Speakers',
-            'Subtitles',
-            'Duration',
-            'Language',
-            'Priority',
-            'Status',
-          ],
+          fields: [...VIDEO_OFFLINE_FIELDS],
           schema: videoOfflineCacheItemSchema,
         });
 
@@ -116,6 +65,16 @@ export async function POST(request: Request) {
       }
 
     } else if (action === 'mutations') {
+      // Require authentication for mutations
+      const authCookie = request.cookies.get('yt-viewer-auth');
+      if (!authCookie || authCookie.value !== 'authenticated') {
+        console.error('[API /api/offline/sync] Unauthorized mutation attempt');
+        return NextResponse.json(
+          { error: 'Unauthorized. Authentication required.' },
+          { status: 401 }
+        );
+      }
+
       // Execute pending mutations on server
       console.log('[API /api/offline/sync] Processing mutations...', mutations?.length || 0);
 

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchAllVideos, videoListItemSchema, type VideoListItem } from '@/features/videos/api/nocodb';
+import { VIDEO_SEARCH_FIELDS } from '@/features/videos/api/fields';
+import { normalizePagination } from '@/shared/utils/pagination';
 
 /**
  * The search endpoint performs in-memory filtering. For small datasets this keeps
@@ -12,9 +14,14 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q') || '';
     const categories = searchParams.get('categories')?.split(',').filter(Boolean) || [];
-    const limit = parseInt(searchParams.get('limit') || '35');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const rawLimit = searchParams.get('limit');
+    const rawOffset = searchParams.get('offset');
     const sort = searchParams.get('sort') || '-CreatedAt';
+
+    const { limit, offset } = normalizePagination({
+      limit: rawLimit ? parseInt(rawLimit) : undefined,
+      offset: rawOffset ? parseInt(rawOffset) : undefined,
+    });
 
     if (!query.trim()) {
       return NextResponse.json({
@@ -50,33 +57,7 @@ export async function GET(request: NextRequest) {
 
     // Get all videos from the database
     const allVideos = await fetchAllVideos({
-      fields: [
-        'Id',
-        'rowId',
-        'Title',
-        'ThumbHigh',
-        'Channel',
-        'Description',
-        'VideoGenre',
-        'VideoID',
-        'Persons',
-        'Companies',
-        'Indicators',
-        'Trends',
-        'InvestableAssets',
-        'TickerSymbol',
-        'Institutions',
-        'EventsFairs',
-        'DOIs',
-        'Hashtags',
-        'MainTopic',
-        'PrimarySources',
-        'Sentiment',
-        'SentimentReason',
-        'TechnicalTerms',
-        'Speaker',
-        'CreatedAt',
-      ],
+      fields: [...VIDEO_SEARCH_FIELDS],
       schema: videoListItemSchema,
     });
 

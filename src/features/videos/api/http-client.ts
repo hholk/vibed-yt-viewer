@@ -9,6 +9,7 @@ import { logDevError } from '@/shared/utils/server-logger';
  */
 export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
+  timeout: 15000, // 15 second default timeout
 });
 
 /**
@@ -32,6 +33,14 @@ export function toRequestError(
       data,
       message: error.message,
     });
+
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      return new NocoDBRequestError(
+        `${context}: Request timed out. NocoDB may be slow or unavailable.`,
+        status,
+        data,
+      );
+    }
 
     return new NocoDBRequestError(`${context}: ${error.message}`, status, data);
   }

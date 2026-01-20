@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchVideos, videoListItemSchema } from '@/features/videos/api/nocodb';
+import { VIDEO_LIST_FIELDS } from '@/features/videos/api/fields';
+import { normalizePagination } from '@/shared/utils/pagination';
 
 /**
  * This route acts as a tiny proxy between the client and the data layer. It keeps
@@ -10,41 +12,20 @@ import { fetchVideos, videoListItemSchema } from '@/features/videos/api/nocodb';
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '35');
+    const rawPage = searchParams.get('page');
+    const rawLimit = searchParams.get('limit');
     const sort = searchParams.get('sort') || '-CreatedAt';
 
-    // Fetch the requested page of videos
+    const { page, limit } = normalizePagination({
+      page: rawPage ? parseInt(rawPage) : undefined,
+      limit: rawLimit ? parseInt(rawLimit) : undefined,
+    });
+
     const result = await fetchVideos({
       sort,
       limit,
       page,
-      fields: [
-        'Id',
-        'rowId',
-        'Title',
-        'ThumbHigh',
-        'Channel',
-        'Description',
-        'VideoGenre',
-        'VideoID',
-        'Persons',
-        'Companies',
-        'Indicators',
-        'Trends',
-        'InvestableAssets',
-        'TickerSymbol',
-        'Institutions',
-        'EventsFairs',
-        'DOIs',
-        'Hashtags',
-        'MainTopic',
-        'PrimarySources',
-        'Sentiment',
-        'SentimentReason',
-        'TechnicalTerms',
-        'Speaker',
-      ],
+      fields: [...VIDEO_LIST_FIELDS],
       schema: videoListItemSchema,
     });
 

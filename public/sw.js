@@ -1,9 +1,9 @@
 // Service Worker for YouTube Video Viewer PWA - Offline Mode
 importScripts('/idb.min.js');
 
-const CACHE_STATIC = 'yt-viewer-static-v20';
-const CACHE_API = 'yt-viewer-api-v20';
-const CACHE_IMAGES = 'yt-viewer-images-v20';
+const CACHE_STATIC = 'yt-viewer-static-v21';
+const CACHE_API = 'yt-viewer-api-v21';
+const CACHE_IMAGES = 'yt-viewer-images-v21';
 
 const DB_NAME = 'yt-viewer-offline';
 const DB_VERSION = 1;
@@ -54,6 +54,13 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - intelligent caching strategy
 self.addEventListener('fetch', (event) => {
+  // Work around a Chrome bug where a request with cache="only-if-cached" is sent
+  // with a mode that would make `fetch(request)` throw.
+  // See: https://stackoverflow.com/a/49719964
+  if (event.request.cache === 'only-if-cached' && event.request.mode !== 'same-origin') {
+    return;
+  }
+
   const url = new URL(event.request.url);
 
   // Allow YouTube thumbnails (cross-origin)
@@ -72,16 +79,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Development/localhost: avoid caching Next.js build artifacts to prevent chunk mismatches.
-  if (IS_LOCALHOST && url.pathname.startsWith('/_next/static/')) {
-    event.respondWith(fetch(event.request));
+  // Never fetch internal build output paths. These are not meant for browsers and can create noisy ENOENT logs.
+  if (url.pathname.startsWith('/_next/server/')) {
+    event.respondWith(new Response('Not Found', { status: 404 }));
     return;
   }
 
   console.log('[SW] Fetch:', url.pathname, url.search, 'Accept:', event.request.headers.get('accept')?.substring(0, 50));
 
+  // Next.js build artifacts (JS/CSS chunks): Network-First with Cache fallback.
+  // This keeps dev/prod stable: while online we always prefer the latest chunks,
+  // while offline we can still boot the UI if chunks were loaded once.
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(handleNextStaticRequest(event.request));
+    return;
+  }
+
   // API Routes: Network-First with offline fallback
   if (url.pathname.startsWith('/api/')) {
+    // Never attempt Cache API writes for non-GET requests (Cache.put throws on POST/PUT/DELETE).
+    if (event.request.method !== 'GET') {
+      event.respondWith(handleNonGetApiRequest(event.request));
+      return;
+    }
+
     // Special handling for /api/videos - use IndexedDB when offline
     if (url.pathname === '/api/videos') {
       event.respondWith(handleVideoAPIRequest(event.request));
@@ -111,43 +132,31 @@ self.addEventListener('fetch', (event) => {
 });
 
 /**
+ * Handle Next.js /_next/static Requests - Network-First with Cache Fallback
+ */
+async function handleNextStaticRequest(request) {
+  try {
+    const response = await fetch(request);
+
+    if (response && response.status === 200) {
+      const cache = await caches.open(CACHE_STATIC);
+      await cache.put(request, response.clone());
+    }
+
+    return response;
+  } catch (error) {
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+  }
+}
+
+/**
  * Handle /api/videos Requests - Network-First with IndexedDB Fallback
  */
 async function handleVideoAPIRequest(request) {
-  // Quick check if we're online
-  const isOnline = navigator.onLine;
-
-  if (!isOnline) {
-    // Offline: Go directly to IndexedDB (faster)
-    console.log('[SW] Offline detected, using IndexedDB for video list...');
-
-    const offlineModeEnabled = await getOfflineModeFromDB();
-
-    if (offlineModeEnabled) {
-      try {
-        const { videos, pageInfo } = await getVideosFromIndexedDB(request);
-        console.log('[SW] Serving videos from IndexedDB:', videos.length, 'total:', pageInfo.totalRows);
-
-        return new Response(
-          JSON.stringify({
-            videos: videos,
-            pageInfo: pageInfo,
-            success: true,
-            offline: true,
-          }),
-          {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-      } catch (dbError) {
-        console.error('[SW] IndexedDB error:', dbError);
-      }
-    }
-
-    return createOfflineErrorResponse('Videos not available offline');
-  }
-
   // Online: Try network first
   try {
     const response = await fetch(request);
@@ -161,15 +170,25 @@ async function handleVideoAPIRequest(request) {
     return response;
   } catch (error) {
     console.log('[SW] Network failed for /api/videos, checking IndexedDB...');
-
+    
     // Network failed, try IndexedDB
     const offlineModeEnabled = await getOfflineModeFromDB();
-
+    
     if (offlineModeEnabled) {
       try {
+        const videoCount = await getVideoCountFromDB();
+        
+        if (videoCount === 0) {
+          // Empty cache - provide helpful message
+          console.warn('[SW] Offline cache is empty, user needs to sync first');
+          return createOfflineErrorResponse(
+            'Keine Offline-Daten vorhanden. Bitte zuerst synchronisieren.'
+          );
+        }
+        
         const { videos, pageInfo } = await getVideosFromIndexedDB(request);
         console.log('[SW] Serving videos from IndexedDB:', videos.length, 'total:', pageInfo.totalRows);
-
+        
         return new Response(
           JSON.stringify({
             videos: videos,
@@ -184,16 +203,17 @@ async function handleVideoAPIRequest(request) {
         );
       } catch (dbError) {
         console.error('[SW] IndexedDB error:', dbError);
+        return createOfflineErrorResponse('Offline-Datenfehler: ' + (dbError instanceof Error ? dbError.message : 'Unbekannt'));
       }
     }
-
+    
     // Fallback to HTTP cache
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       return cachedResponse;
     }
-
-    return createOfflineErrorResponse('Videos not available offline');
+    
+    return createOfflineErrorResponse('Videos nicht verfügbar offline');
   }
 }
 
@@ -202,57 +222,6 @@ async function handleVideoAPIRequest(request) {
  */
 async function handleVideoDetailRequest(request) {
   const cacheKeyRequest = new Request(request.url, { method: 'GET' });
-
-  // Quick check if we're online
-  const isOnline = navigator.onLine;
-
-  if (!isOnline) {
-    // If we have a full cached response for this exact request, prefer it.
-    // This is especially useful when the IndexedDB cache only contains list fields.
-    const cachedResponse = await caches.match(cacheKeyRequest);
-    if (cachedResponse) {
-      console.log('[SW] Serving video details from Cache API:', request.url);
-      return cachedResponse;
-    }
-
-    // Offline: Go directly to IndexedDB (faster)
-    console.log('[SW] Offline detected, using IndexedDB...');
-
-    const offlineModeEnabled = await getOfflineModeFromDB();
-
-    if (offlineModeEnabled) {
-      try {
-        const url = new URL(request.url);
-        const videoId = url.searchParams.get('videoId');
-
-        if (!videoId) {
-          return createOfflineErrorResponse('Missing videoId parameter');
-        }
-
-        const video = await getVideoByIdFromIndexedDB(videoId);
-
-        if (video) {
-          return new Response(
-            JSON.stringify({
-              success: true,
-              video: video,
-              previousVideo: null,
-              nextVideo: null,
-              offline: true,
-            }),
-            {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' },
-            }
-          );
-        }
-      } catch (dbError) {
-        console.error('[SW] IndexedDB error:', dbError);
-      }
-    }
-
-    return createOfflineErrorResponse('Video not available offline');
-  }
 
   // Online: Try network first
   try {
@@ -283,18 +252,56 @@ async function handleVideoDetailRequest(request) {
     return response;
   } catch (error) {
     console.log('[SW] Network failed, checking IndexedDB...');
-
+    
     // Network failed, try IndexedDB
     const offlineModeEnabled = await getOfflineModeFromDB();
-
+    
     if (offlineModeEnabled) {
       try {
         const url = new URL(request.url);
         const videoId = url.searchParams.get('videoId');
-
+        
         if (!videoId) {
           return createOfflineErrorResponse('Missing videoId parameter');
         }
+        
+        const video = await getVideoByIdFromIndexedDB(videoId);
+        
+        if (video) {
+          console.log('[SW] Serving video from IndexedDB:', video.VideoID ?? video.Id);
+          return new Response(
+            JSON.stringify({
+              success: true,
+              video: video,
+              previousVideo: null,
+              nextVideo: null,
+              offline: true,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+        } else {
+          console.warn('[SW] Video not found in IndexedDB:', videoId);
+          return createOfflineErrorResponse(
+            'Video nicht im Offline-Cache gefunden. Bitte synchronisieren.'
+          );
+        }
+      } catch (dbError) {
+        console.error('[SW] IndexedDB error:', dbError);
+        return createOfflineErrorResponse('Offline-Fehler: ' + (dbError instanceof Error ? dbError.message : 'Unbekannt'));
+      }
+    }
+    
+    // Fallback to HTTP cache
+    const cachedResponse = await caches.match(cacheKeyRequest);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    
+    return createOfflineErrorResponse('Video nicht verfügbar offline');
+  }
 
         const video = await getVideoByIdFromIndexedDB(videoId);
 
@@ -337,9 +344,9 @@ async function handleAPIRequest(request) {
     const response = await fetch(request);
 
     // Cache successful responses
-    if (response && response.status === 200) {
+    if (request.method === 'GET' && response && response.status === 200) {
       const cache = await caches.open(CACHE_API);
-      cache.put(request, response.clone());
+      await cache.put(request, response.clone());
     }
 
     return response;
@@ -365,6 +372,19 @@ async function handleAPIRequest(request) {
         headers: { 'Content-Type': 'application/json' },
       }
     );
+  }
+}
+
+/**
+ * Handle non-GET API Requests - Network-Only
+ *
+ * Note: The Cache API does not support caching non-GET requests.
+ */
+async function handleNonGetApiRequest(request) {
+  try {
+    return await fetch(request);
+  } catch (error) {
+    return createOfflineErrorResponse('Offline - request failed');
   }
 }
 
@@ -423,12 +443,6 @@ async function handleStaticRequest(request) {
                      url.pathname === '/settings' ||
                      url.pathname.startsWith('/video/') ||
                      request.headers.get('accept')?.includes('text/html');
-
-  // Development/localhost: never cache HTML or static assets.
-  // This prevents "ChunkLoadError" when the dev server recompiles and filenames change.
-  if (IS_LOCALHOST) {
-    return fetch(request);
-  }
 
   // For HTML pages: Network-First (so updates are loaded when online)
   if (isHTMLPage) {
@@ -590,11 +604,15 @@ async function handleStaticRequest(request) {
  * Create a consistent offline error response
  */
 function createOfflineErrorResponse(message) {
+  // Provide more specific offline error messages
+  const errorMessage = message || 'Offline - no cached data available';
+  
   return new Response(
     JSON.stringify({
       success: false,
-      error: message || 'Offline - no cached data available',
+      error: errorMessage,
       offline: true,
+      needsSync: !message, // Indicates if user needs to sync first
     }),
     {
       status: 503,
@@ -729,39 +747,29 @@ async function getVideoByIdFromIndexedDB(videoId) {
 
 /**
  * Get videos from IndexedDB
+ * OPTIMIZED: Use indexed query with limit instead of getAll() + slice
  */
 async function getVideosFromIndexedDB(request) {
   try {
     const db = await openOfflineDB();
-
-    // Get all videos sorted by CreatedAt (newest first)
-    const tx = db.transaction('videos', 'readonly');
-    const index = tx.store.index('by-createdAt');
-    const allVideos = await index.getAll();
-
-    // Sort descending (newest first)
-    allVideos.sort((a, b) => {
-      const dateA = a.CreatedAt ? new Date(a.CreatedAt).getTime() : 0;
-      const dateB = b.CreatedAt ? new Date(b.CreatedAt).getTime() : 0;
-      return dateB - dateA;
-    });
-
-    // Parse query parameters for pagination
     const url = new URL(request.url);
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = parseInt(url.searchParams.get('limit') || '35');
-
-    // Apply pagination
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    const paginatedVideos = allVideos.slice(start, end);
-
+    
+    // Use index query with limit and offset (much faster than getAll() + sort)
+    const tx = db.transaction('videos', 'readonly');
+    const index = tx.store.index('by-createdAt');
+    const offset = (page - 1) * limit;
+    
+    const paginatedVideos = await index.getAll(null, limit, offset);
+    
+    const allVideos = await db.getAll('videos'); // For total count only
     const totalRows = allVideos.length;
     const pageCount = Math.ceil(totalRows / limit);
     const hasNextPage = page < pageCount;
-
+    
     console.log(`[SW] IndexedDB: Total ${totalRows}, page ${page}/${pageCount}, returning ${paginatedVideos.length} videos, hasNext: ${hasNextPage}`);
-
+    
     return {
       videos: paginatedVideos,
       pageInfo: {
@@ -776,6 +784,22 @@ async function getVideosFromIndexedDB(request) {
   } catch (error) {
     console.error('[SW] Error reading from IndexedDB:', error);
     throw error;
+  }
+}
+
+/**
+ * Get video by VideoID from IndexedDB
+ */
+async function getVideoByIdFromIndexedDB(videoId) {
+  try {
+    const db = await openOfflineDB();
+    const tx = db.transaction('videos', 'readonly');
+    const index = tx.store.index('by-videoId');
+    const video = await index.get(videoId);
+    return video;
+  } catch (error) {
+    console.error('[SW] Error reading video from IndexedDB:', error);
+    return null;
   }
 }
 
