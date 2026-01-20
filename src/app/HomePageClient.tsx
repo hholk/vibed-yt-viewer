@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { Settings } from 'lucide-react';
 import { SearchComponent } from '@/shared/components/search-component';
 import { PWAInstallPrompt } from '@/shared/components/pwa-install-prompt';
+import { Button } from '@/shared/components/ui/button';
+import { SavedList } from '@/features/saved/components/saved-list';
 
 /**
  * Client-side HomePage Component
@@ -13,6 +16,8 @@ import { PWAInstallPrompt } from '@/shared/components/pwa-install-prompt';
  * to intercept /api/videos requests and serve data from IndexedDB when offline.
  */
 export function HomePageClient() {
+  const [activeView, setActiveView] = useState<'summaries' | 'saved'>('summaries');
+
   return (
     <div className="min-h-screen bg-neutral-900 text-neutral-50 p-4 md:p-8 font-plex-sans">
       <div className="container mx-auto max-w-5xl">
@@ -21,6 +26,22 @@ export function HomePageClient() {
             Video Collection
           </h1>
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 rounded-lg bg-neutral-800/80 p-1">
+              <Button
+                size="sm"
+                variant={activeView === 'summaries' ? 'secondary' : 'ghost'}
+                onClick={() => setActiveView('summaries')}
+              >
+                Summaries
+              </Button>
+              <Button
+                size="sm"
+                variant={activeView === 'saved' ? 'secondary' : 'ghost'}
+                onClick={() => setActiveView('saved')}
+              >
+                Saved
+              </Button>
+            </div>
             <Link
               href="/settings"
               className="p-2 rounded-lg hover:bg-neutral-800 transition-colors"
@@ -31,13 +52,16 @@ export function HomePageClient() {
           </div>
         </div>
 
-        <div className="search-component-wrapper">
-          {/* No initialVideos - let SearchComponent fetch client-side */}
-          <SearchComponent initialVideos={[]} />
-        </div>
+        {activeView === 'summaries' ? (
+          <div className="search-component-wrapper">
+            {/* No initialVideos - let SearchComponent fetch client-side */}
+            <SearchComponent initialVideos={[]} />
+          </div>
+        ) : (
+          <SavedList />
+        )}
 
-        {/* PWA Install Prompt */}
-        <PWAInstallPrompt />
+        {activeView === 'summaries' && <PWAInstallPrompt />}
       </div>
     </div>
   );

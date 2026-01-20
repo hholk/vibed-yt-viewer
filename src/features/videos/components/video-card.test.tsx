@@ -48,8 +48,15 @@ const sample: VideoListItem = {
 
 describe('VideoCard', () => {
   it('renders link to video page', () => {
+    const { getAllByRole } = render(<VideoCard video={sample} />);
+    const links = getAllByRole('link');
+    const videoLink = links.find(link => link.getAttribute('href') === '/video/abc123');
+    expect(videoLink).toBeTruthy();
+  });
+
+  it('renders a download button', () => {
     const { getByRole } = render(<VideoCard video={sample} />);
-    const link = getByRole('link');
-    expect(link).toHaveAttribute('href', '/video/abc123');
+    const button = getByRole('link', { name: /download test video/i });
+    expect(button).toHaveAttribute('href', expect.stringContaining('/api/videos/abc123/download'));
   });
 });
