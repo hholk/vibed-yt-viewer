@@ -243,7 +243,7 @@ export async function getHoneypotLogsByIP(ip: string, limit = 50): Promise<Honey
 export async function getHoneypotLogsByPath(path: string, limit = 50): Promise<HoneypotLog[]> {
   const db = await openOfflineDB();
   const index = db.transaction('honeypotLogs').store.index('by-path');
-  const logs = await index.getAll(IDBKeyRange.startsWith(path));
+  const logs = await index.getAll(IDBKeyRange.bound([path, path + '\uffff'], open(), true));
   return logs.reverse().slice(0, limit);
 }
 
