@@ -16,6 +16,8 @@ A modern, responsive web application for browsing, searching, and interacting wi
   - **Filter Logic**: Simplified video filtering using configuration-driven approach with generic utilities
   - **Cache Management**: Fixed cache duplication issues and improved cache key consistency
   - All optimizations maintain backward compatibility while significantly improving code quality and performance
+- **Downloads**: Download video or audio files in selectable qualities (default 720p) directly from the video cards
+- **Saved Playlist View**: Toggle to a YouTube “Saved” playlist view with cached metadata (up to 5 GB cap)
 
 ## 🔍 Advanced Search System
 
@@ -113,6 +115,9 @@ If you use VS Code, the repository includes a preconfigured **dev container**. I
    NOCODB_TABLE_ID=your_table_id              # e.g. m1lyoeqptp7fq5z (opaque v2 id)
    # Optional: human-readable slug for diagnostics/logging
    # NOCODB_TABLE_NAME=youtubeTranscripts
+
+   # YouTube Saved playlist (required for the Saved toggle)
+   YOUTUBE_SAVED_PLAYLIST_ID=your_playlist_id
    ```
    > **Note for beginners:** The client now follows the official NocoDB v2 guidance (see the "Tables API" documentation and the StackOverflow discussion on PATCHing rows via `_rowId`). Provide the opaque `NOCODB_TABLE_ID` from the v2 UI/API and ensure `_rowId` support is enabled in your table. `NOCODB_TABLE_NAME` is optional and used only for diagnostics. All requests authenticate via the `xc-token` header.
 
@@ -134,6 +139,8 @@ NOCODB_PROJECT_ID=phk8vxq6f1ev08h
 NOCODB_TABLE_ID=m1lyoeqptp7fq5z
 # Optional diagnostic slug
 # NOCODB_TABLE_NAME=youtubeTranscripts
+# YouTube Saved playlist
+YOUTUBE_SAVED_PLAYLIST_ID=your_playlist_id
 ```
 
 If you do not have NocoDB running locally you can start one with Docker:
