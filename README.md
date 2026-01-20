@@ -9,6 +9,7 @@ A modern, responsive web application for browsing, searching, and interacting wi
   - Tag-based search interface similar to macOS Finder
   - Category-based filtering with visual icons
   - Real-time search across the complete video database
+- **Saved Playlist Overview**: Toggle between summaries from NocoDB and a YouTube playlist feed with client-side caching
 - **Code Optimization**: The NocoDB client has been extensively refactored to eliminate code duplication and improve maintainability:
   - **Schema Preprocessing**: Created reusable preprocessing utilities (`preprocessors` object) to reduce schema definition code by ~70%
   - **API Function Consolidation**: Unified duplicate fetch functions into a single `fetchSingleVideo` function with consistent behavior
@@ -111,6 +112,9 @@ If you use VS Code, the repository includes a preconfigured **dev container**. I
    NC_TOKEN=your_nocodb_token
    NOCODB_PROJECT_ID=your_project_id          # e.g. phk8vxq6f1ev08h
    NOCODB_TABLE_ID=your_table_id              # e.g. m1lyoeqptp7fq5z (opaque v2 id)
+   # YouTube Saved Playlist (for the "Saved" overview)
+   YOUTUBE_API_KEY=your_youtube_api_key
+   YOUTUBE_SAVED_PLAYLIST_ID=your_playlist_id
    # Optional: human-readable slug for diagnostics/logging
    # NOCODB_TABLE_NAME=youtubeTranscripts
    ```
@@ -132,6 +136,8 @@ NC_URL=http://localhost:8080
 NC_TOKEN=your_nocodb_token
 NOCODB_PROJECT_ID=phk8vxq6f1ev08h
 NOCODB_TABLE_ID=m1lyoeqptp7fq5z
+YOUTUBE_API_KEY=your_youtube_api_key
+YOUTUBE_SAVED_PLAYLIST_ID=your_playlist_id
 # Optional diagnostic slug
 # NOCODB_TABLE_NAME=youtubeTranscripts
 ```

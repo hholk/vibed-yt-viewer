@@ -48,8 +48,9 @@ const sample: VideoListItem = {
 
 describe('VideoCard', () => {
   it('renders link to video page', () => {
-    const { getByRole } = render(<VideoCard video={sample} />);
-    const link = getByRole('link');
-    expect(link).toHaveAttribute('href', '/video/abc123');
+    const { getAllByRole } = render(<VideoCard video={sample} />);
+    const links = getAllByRole('link');
+    expect(links[0]).toHaveAttribute('href', '/video/abc123');
+    expect(links[1]).toHaveAttribute('href', '/api/videos/abc123/download');
   });
 });
