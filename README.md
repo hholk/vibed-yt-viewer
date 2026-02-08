@@ -218,6 +218,8 @@ yt-viewer/
 
 The application is designed to work with a NocoDB instance with the following requirements:
 
+> Detaillierte Hinweise zur Verwendung der einzelnen NocoDB-Clientfunktionen finden sich in [docs/nocodb-usage.md](docs/nocodb-usage.md).
+
 ### Required Table: `youtubeTranscripts`
 
 **Key Fields**:
