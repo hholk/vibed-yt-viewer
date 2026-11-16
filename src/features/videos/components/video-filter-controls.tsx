@@ -21,7 +21,7 @@ export function VideoFilterControls({ videos }: { videos: VideoListItem[] }) {
         }
       }
     }
-    return [...options.values()];
+    return Array.from(options.values());
   }, [videos]);
   function update(filters: FilterOption[]) {
     const next = withFilters(new URLSearchParams(window.location.search), filters).toString();
