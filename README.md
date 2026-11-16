@@ -464,3 +464,5 @@ Preprocessors in `src/features/videos/api/schemas.ts` handle common NocoDB forma
 - Date fields – parsed with `z.coerce.date()` for robust ISO handling.
 
 Troubleshooting: If validation fails, we log the offending response and raise a `NocoDBValidationError` with precise Zod issues. Adjust the schema to match your actual NocoDB column formats.
+
+NocoDB-API und lokale Contract-Tests: [Nutzungsleitfaden](docs/nocodb-usage.md).
