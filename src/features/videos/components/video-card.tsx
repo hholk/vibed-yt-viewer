@@ -9,16 +9,17 @@ import type { VideoListItem } from '@/features/videos/api/nocodb';
 interface VideoCardProps {
   video: VideoListItem;
   priority?: boolean;
+  href?: string;
 }
 
-export function VideoCard({ video, priority = false }: VideoCardProps) {
+export function VideoCard({ video, href, priority = false }: VideoCardProps) {
   const thumbnailUrl =
     video.ThumbHigh && typeof video.ThumbHigh === 'string' ? video.ThumbHigh : null;
 
   return (
     <div className="flex h-full flex-col rounded-lg shadow-sm transition-shadow hover:shadow-md">
       <Link
-        href={`/video/${video.VideoID}`}
+        href={href ?? `/video/${video.VideoID}`}
         className="block h-full rounded-lg hover:shadow-lg transition-shadow duration-200"
       >
         <div

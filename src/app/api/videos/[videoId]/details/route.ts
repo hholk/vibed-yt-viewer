@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchVideoByVideoId, getVideoNavigationData, getSimpleNavigationData } from '@/features/videos/api/nocodb';
+import { fetchVideoByVideoId, getVideoNavigationData, getSimpleNavigationData, fetchAllVideos, videoListItemSchema } from '@/features/videos/api/nocodb';
+
+import { parseFilters, filterVideos } from '@/features/videos/utils/filters';
 
 /**
  * GET /api/videos/[videoId]/details
@@ -45,14 +47,24 @@ export async function GET(
     let nextVideoData: { Id: string; Title: string | null } | null = null;
 
     try {
-      const navData = await getVideoNavigationData(video.VideoID || '', sortParam);
-      previousVideoData = navData.previousVideoData;
-      nextVideoData = navData.nextVideoData;
+      const filters = parseFilters(searchParams);
+      if (filters.length) {
+        const videos = filterVideos(await fetchAllVideos({ sort: sortParam, fields: Object.keys(videoListItemSchema.shape), schema: videoListItemSchema }), filters);
+        const index = videos.findIndex(item => item.VideoID === video.VideoID);
+        const previous = index > 0 ? videos[index - 1] : null;
+        const next = index >= 0 ? videos[index + 1] : null;
+        previousVideoData = previous?.VideoID ? { Id: previous.VideoID, Title: previous.Title ?? null } : null;
+        nextVideoData = next?.VideoID ? { Id: next.VideoID, Title: next.Title ?? null } : null;
+      } else {
+        const navData = await getVideoNavigationData(video.VideoID || '', sortParam);
+        previousVideoData = navData.previousVideoData;
+        nextVideoData = navData.nextVideoData;
 
-      if (!previousVideoData && !nextVideoData) {
-        const fallbackNavData = await getSimpleNavigationData(video.VideoID || '', sortParam);
-        previousVideoData = fallbackNavData.previousVideoData;
-        nextVideoData = fallbackNavData.nextVideoData;
+        if (!previousVideoData && !nextVideoData) {
+          const fallbackNavData = await getSimpleNavigationData(video.VideoID || '', sortParam);
+          previousVideoData = fallbackNavData.previousVideoData;
+          nextVideoData = fallbackNavData.nextVideoData;
+        }
       }
     } catch {
       // Continue without navigation data if there's an error

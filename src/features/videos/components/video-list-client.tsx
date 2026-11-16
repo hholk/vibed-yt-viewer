@@ -5,49 +5,9 @@ import { SortDropdown } from './sort-dropdown';
 import { VideoCard } from './video-card';
 import { Badge } from '@/shared/components/ui/badge';
 import type { VideoListItem, PageInfo } from '@/features/videos/api/nocodb';
+import { useSearchParams } from 'next/navigation';
+import { FILTER_CONFIG, parseFilters, withFilters, filterVideos, type FilterOption, type FilterType } from '../utils/filters';
 import { X, Loader2 } from 'lucide-react';
-
-/**
- * Utility functions for extracting filterable data from videos
- */
-
-// Extract titles from arrays of strings or objects
-function extractTitles(
-  items?: (string | { Title?: string | null; name?: string | null })[] | null
-): string[] {
-  if (!items) return [];
-  return items.map((i) => {
-    if (typeof i === "string") return i;
-    if (typeof i === "object" && i !== null) {
-      return ("Title" in i && i.Title) ? i.Title : ("name" in i && i.name) ? i.name ?? "" : "";
-    }
-    return "";
-  });
-}
-
-// Generic getter for linked record fields
-function linkedGetter(key: keyof VideoListItem) {
-  return (v: VideoListItem): string[] => {
-    const value = v[key] as unknown;
-    if (Array.isArray(value)) {
-      return extractTitles(value as (string | { Title?: string | null; name?: string | null })[]);
-    }
-    if (typeof value === "string") {
-      return [value];
-    }
-    return [];
-  };
-}
-
-// Generic getter for simple string/number fields
-function simpleGetter<T>(key: keyof VideoListItem, transform?: (value: T) => string) {
-  return (v: VideoListItem): string[] => {
-    const value = v[key];
-    if (value == null) return [];
-    const transformed = transform ? transform(value as T) : String(value);
-    return [transformed];
-  };
-}
 
 interface VideoListClientProps {
   videos: (VideoListItem & {
@@ -71,56 +31,14 @@ interface VideoListClientProps {
   initialSort?: string;
 }
 
-// Simplified filter type definitions - only using fields available in VideoListItem
-type FilterType =
-  | "person"
-  | "company"
-  | "genre"
-  | "indicator"
-  | "trend"
-  | "asset"
-  | "institution"
-  | "event"
-  | "doi"
-  | "hashtag"
-  | "primarySource"
-  | "sentiment"
-  | "channel"
-  | "description"
-  | "technicalTerm"
-  | "speaker";
-
-interface FilterOption {
-  label: string;
-  value: string;
-  type: FilterType;
-}
-
-// Configuration-driven filter getters - only using fields available in VideoListItem schema
-const FILTER_CONFIG: Record<FilterType, (v: VideoListItem) => string[]> = {
-  person: linkedGetter("Persons"),
-  company: linkedGetter("Companies"),
-  genre: simpleGetter("VideoGenre"),
-  indicator: linkedGetter("Indicators"),
-  trend: linkedGetter("Trends"),
-  asset: (v: VideoListItem) => v.InvestableAssets ?? [],
-  institution: linkedGetter("Institutions"),
-  event: (v: VideoListItem) => v.EventsFairs ?? [],
-  doi: (v: VideoListItem) => v.DOIs ?? [],
-  hashtag: (v: VideoListItem) => v.Hashtags ?? [],
-  primarySource: (v: VideoListItem) => v.PrimarySources ?? [],
-  sentiment: (v: VideoListItem) =>
-    v.Sentiment !== null && v.Sentiment !== undefined
-      ? [String(v.Sentiment)]
-      : [],
-  channel: simpleGetter("Channel"),
-  description: simpleGetter("Description"),
-  technicalTerm: (v: VideoListItem) => v.TechnicalTerms ?? [],
-  speaker: simpleGetter("Speaker"),
-};
-
 export function VideoListClient({ videos, pageInfo, initialSort }: VideoListClientProps) {
-  const [selectedFilters, setSelectedFilters] = useState<FilterOption[]>([]);
+  const searchParams = useSearchParams();
+  const selectedFilters = useMemo(() => parseFilters(searchParams), [searchParams]);
+  const setSelectedFilters = (filters: FilterOption[]) => {
+    const params = withFilters(new URLSearchParams(window.location.search), filters);
+    const query = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+  };
   const [searchTerm, setSearchTerm] = useState("");
   const [allVideos, setAllVideos] = useState(videos);
   const [currentPage, setCurrentPage] = useState(2); // Start from page 2 since we already have page 1
@@ -178,18 +96,16 @@ export function VideoListClient({ videos, pageInfo, initialSort }: VideoListClie
   // Filter videos based on selected filters
   const filteredVideos = useMemo(() => {
     if (selectedFilters.length === 0) return allVideos;
-    return allVideos.filter((video) =>
-      selectedFilters.every((filter) => FILTER_CONFIG[filter.type](video).includes(filter.value)),
-    );
+    return filterVideos(allVideos, selectedFilters);
   }, [allVideos, selectedFilters]);
 
   const addFilter = (opt: FilterOption) => {
-    setSelectedFilters((prev) => [...prev, opt]);
+    setSelectedFilters([...parseFilters(new URLSearchParams(window.location.search)), opt]);
     setSearchTerm("");
   };
 
   const removeFilter = (index: number) => {
-    setSelectedFilters((prev) => prev.filter((_, i) => i !== index));
+    setSelectedFilters(parseFilters(new URLSearchParams(window.location.search)).filter((_, i) => i !== index));
   };
 
   const loadMoreVideos = useCallback(async () => {
@@ -321,7 +237,7 @@ export function VideoListClient({ videos, pageInfo, initialSort }: VideoListClie
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
         {filteredVideos.map((video, index) => (
-          <VideoCard key={video.Id} video={video} priority={index === 0} />
+          <VideoCard key={video.Id} video={video} href={`/video/${video.VideoID}${searchParams.size ? `?${searchParams}` : ''}`} priority={index === 0} />
         ))}
       </div>
 

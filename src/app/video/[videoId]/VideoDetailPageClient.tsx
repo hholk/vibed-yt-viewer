@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Video, VideoListItem } from "@/features/videos/api/nocodb";
 import { VideoDetailPageContent } from "./VideoDetailPageContent";
@@ -17,8 +18,11 @@ interface VideoDetailPageClientProps {
  * Fetcher function that calls the API route
  * Service Worker will intercept this when offline and serve from IndexedDB
  */
-const fetcher = async (videoId: string, sort: string = '-CreatedAt') => {
-  const response = await fetch(`/api/videos/${videoId}/details?videoId=${videoId}&sort=${sort}`);
+const fetcher = async (videoId: string, query: string) => {
+  const params = new URLSearchParams(query);
+  params.set('videoId', videoId); // Required by the offline Service Worker.
+  if (!params.has('sort')) params.set('sort', '-CreatedAt');
+  const response = await fetch(`/api/videos/${encodeURIComponent(videoId)}/details?${params}`);
 
   if (!response.ok) {
     throw new Error(`Failed to fetch video: ${response.status}`);
@@ -44,6 +48,9 @@ export default function VideoDetailPageClient({
   initialPreviousVideo,
   initialNextVideo
 }: VideoDetailPageClientProps) {
+  const searchParams = useSearchParams();
+  const query = searchParams.toString();
+
   // Extract videoId from browser URL to handle cached HTML pages correctly
   const [actualVideoId, setActualVideoId] = useState<string>(serverVideoId);
 
@@ -61,8 +68,8 @@ export default function VideoDetailPageClient({
   }, [serverVideoId, actualVideoId]);
 
   const { data, error, isLoading } = useSWR(
-    ["video-detail", actualVideoId],
-    () => fetcher(actualVideoId),
+    ["video-detail", actualVideoId, query],
+    () => fetcher(actualVideoId, query),
     {
       fallbackData: initialVideo ? {
         video: initialVideo,
@@ -89,7 +96,7 @@ export default function VideoDetailPageClient({
       <div className="min-h-screen bg-neutral-900 text-neutral-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-xl text-red-400 mb-4">Error: {error.message}</p>
-          <Link href="/" className="text-blue-400 hover:text-blue-300 underline">
+          <Link href={`/${query ? `?${query}` : ''}`} className="text-blue-400 hover:text-blue-300 underline">
             Back to Video List
           </Link>
         </div>
@@ -102,7 +109,7 @@ export default function VideoDetailPageClient({
       <div className="min-h-screen bg-neutral-900 text-neutral-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-xl text-neutral-400">Video not found.</p>
-          <Link href="/" className="text-blue-400 hover:text-blue-300 underline">
+          <Link href={`/${query ? `?${query}` : ''}`} className="text-blue-400 hover:text-blue-300 underline">
             Back to Video List
           </Link>
         </div>
