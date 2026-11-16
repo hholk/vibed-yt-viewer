@@ -229,20 +229,28 @@ describe('NocoDB client usage', () => {
       Title: 'Updated',
       ThumbHigh: [{ url: 'https://img.example/thumb.jpg' }],
     };
-    mockPatch.mockResolvedValue({ data: responsePayload });
-    mockGet.mockResolvedValue({ data: { list: [responsePayload] } });
+    // PATCH acknowledges the write; only the subsequent GET returns the updated record.
+    mockPatch.mockResolvedValue({ data: { Id: 55 } });
+    mockGet
+      .mockResolvedValueOnce({ data: { list: [{ ...responsePayload, Title: 'Before update' }] } })
+      .mockResolvedValueOnce({ data: { list: [responsePayload] } });
 
     const { updateVideo } = await loadClient();
     const updated = await updateVideo(55, { ImportanceRating: 4, Watched: true });
 
     expect(updated.VideoID).toBe('video-55');
+    expect(updated.Title).toBe('Updated');
+    expect(mockGet).toHaveBeenCalledTimes(2);
+    expect(mockPatch.mock.invocationCallOrder[0]).toBeGreaterThan(mockGet.mock.invocationCallOrder[0]);
+    expect(mockPatch.mock.invocationCallOrder[0]).toBeLessThan(mockGet.mock.invocationCallOrder[1]);
     expect(mockPatch).toHaveBeenCalledWith(
       'http://nocodb.test/api/v2/tables/table-xyz/records',
       expect.objectContaining({ Id: 55, ImportanceRating: 4, Watched: true }),
       expect.objectContaining({ headers: { 'xc-token': 'token-123' } })
     );
     expect(mockSetInCache).toHaveBeenCalledWith('video-55', expect.any(Object));
-    expect(mockSetInCache).toHaveBeenCalledWith('55', expect.any(Object));
+    expect(cacheStore.get('55')).toMatchObject({ Title: 'Updated' });
+    expect(cacheStore.get('video-55')).toMatchObject({ Title: 'Updated' });
   });
 
   it('deleteVideo removes cached entries and sends DELETE request', async () => {
