@@ -841,7 +841,7 @@ export function VideoDetailPageContent({
       <div className="container mx-auto max-w-5xl">
 
         <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
-          <Link href={`/?sort=${searchParams.get('sort') || '-CreatedAt'}`} className="flex items-center text-blue-400 hover:text-blue-300 transition-colors group">
+          <Link href={`/?${searchParams.toString() || 'sort=-CreatedAt'}`} className="flex items-center text-blue-400 hover:text-blue-300 transition-colors group">
             <ArrowLeft size={18} className="mr-2 group-hover:-translate-x-1 transition-transform duration-200" />
             Back to Video List
           </Link>

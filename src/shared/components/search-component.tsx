@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useSearchParams } from 'next/navigation';
+import { VideoFilterControls } from '@/features/videos/components/video-filter-controls';
+import { parseFilters, filterVideos } from '@/features/videos/utils/filters';
 import { Search, Tag, Filter, X, Loader2 } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
 import { Button } from '@/shared/components/ui/button';
@@ -43,6 +46,9 @@ const SEARCH_CATEGORIES = [
 ];
 
 export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
+  const urlParams = useSearchParams();
+  const sort = urlParams.get('sort') || '-CreatedAt';
+  const urlFilters = useMemo(() => parseFilters(urlParams), [urlParams]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTags, setSearchTags] = useState<SearchTag[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -54,6 +60,8 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
   const [totalResults, setTotalResults] = useState(0);
   const loadingRef = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false);
+
+  const visibleResults = useMemo(() => filterVideos(searchResults, urlFilters), [searchResults, urlFilters]);
 
   // Generate unique ID for tags
   const generateTagId = useCallback(() => {
@@ -115,7 +123,7 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
 
       try {
         const page = currentPage; // Use current page number, not currentPage + 1
-        const response = await fetch(`/api/videos?page=${page}&limit=35&sort=-CreatedAt`);
+        const response = await fetch(`/api/videos?page=${page}&limit=35&sort=${encodeURIComponent(sort)}`);
         const data = await response.json();
 
         if (data.success && data.videos && data.videos.length > 0) {
@@ -157,7 +165,7 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
       const page = isLoadMore ? currentPage : 1;
       const offset = (page - 1) * 35;
 
-      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&categories=${encodeURIComponent(categories.join(','))}&limit=35&offset=${offset}&sort=-CreatedAt`);
+      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&categories=${encodeURIComponent(categories.join(','))}&limit=35&offset=${offset}&sort=${encodeURIComponent(sort)}`);
       const data = await response.json();
 
       if (data.success) {
@@ -189,7 +197,7 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
       setIsSearching(false);
       isLoadingRef.current = false;
     }
-  }, [searchTags, selectedCategories, currentPage]);
+  }, [searchTags, selectedCategories, currentPage, sort]);
 
   // Trigger search when tags or categories change
   useEffect(() => {
@@ -405,6 +413,8 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
         </CardContent>
       </Card>
 
+      <VideoFilterControls videos={searchResults} />
+
       {/* Search Results */}
       <div className="space-y-3">
         {/* Results Header */}
@@ -418,6 +428,8 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
             <span className="text-sm text-muted-foreground">
               {isSearching
                 ? 'Searching...'
+                : urlFilters.length > 0
+                  ? `${visibleResults.length} of ${searchResults.length} loaded videos match filters`
                 : searchTags.length > 0
                   ? `${searchResults.length}${totalResults > searchResults.length ? ` of ${totalResults}` : ''} video${searchResults.length !== 1 ? 's' : ''} found`
                   : `${searchResults.length}${totalResults > searchResults.length ? ` of ${totalResults}` : ''} video${searchResults.length !== 1 ? 's' : ''} total`
@@ -434,8 +446,8 @@ export function SearchComponent({ initialVideos = [] }: SearchComponentProps) {
         {/* Results Grid - Always show first */}
         {searchResults.length > 0 && (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-            {searchResults.map((video, index) => (
-              <VideoCard key={`${video.Id}-${index}`} video={video} priority={index === 0} />
+            {visibleResults.map((video, index) => (
+              <VideoCard key={`${video.Id}-${index}`} video={video} href={`/video/${video.VideoID}${urlParams.size ? `?${urlParams}` : ''}`} priority={index === 0} />
             ))}
           </div>
         )}
