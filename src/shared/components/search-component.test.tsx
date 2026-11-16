@@ -1,5 +1,6 @@
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(window.location.search) }));
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SearchComponent } from './search-component';
 
 const mockVideos = [
